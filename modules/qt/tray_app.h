@@ -1,0 +1,89 @@
+/**
+ * @file qt/tray_app.h Qt UI module -- tray icon + menu
+ */
+#pragma once
+
+#include "qt_mod.h"
+
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QActionGroup>
+#include <QHash>
+#include <QPointer>
+
+class DialDialog;
+class DialpadDialog;
+
+class TrayApp : public QObject {
+	Q_OBJECT
+
+public:
+	explicit TrayApp(struct qt_mod *mod, QObject *parent = nullptr);
+	~TrayApp() override;
+
+	void show();
+
+public slots:
+	/* Called (via queued connection) from baresip's event handler,
+	 * which runs on the re/core thread.
+	 */
+	void accountStatus(quintptr uaPtr, QString aor, QString status);
+	void callIncoming(quintptr callPtr, QString peerUri, QString peerName);
+	void callOutgoing(quintptr callPtr, QString peerUri);
+	void callClosed(quintptr callPtr, bool missed,
+			 QString peerUri, QString peerName);
+	void callEstablished(quintptr callPtr);
+	void addHistory(QString uri, int callType, QString info);
+	void showWarning(QString title, QString text);
+
+private slots:
+	void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
+	void onDial();
+	void onAbout();
+	void onQuit();
+	void onAccountToggled(QAction *action);
+	void onStatusToggled(QAction *action);
+	void onDialContact(QAction *action);
+	void onDialHistory(QAction *action);
+	void onAnswer(quintptr callPtr);
+	void onReject(quintptr callPtr, QString peerUri, QString peerName);
+	void onHangup(quintptr callPtr);
+	void openDialpad(quintptr callPtr, QString peerLabel);
+
+private:
+	void buildMenu();
+	void populateAccounts();
+	void populateContacts();
+	QAction *findAccountAction(quintptr uaPtr) const;
+	void setTrayIcon(const QString &themeName, const QString &fallback);
+	QMenu *addCallMenu(quintptr callPtr, const QString &title);
+	void convertToHangup(quintptr callPtr, const QString &peerUri);
+	void addDialpadAction(QMenu *callMenu, quintptr callPtr,
+			       const QString &peerLabel);
+	void refreshTrayMenu();
+
+	struct qt_mod *mod_;
+
+	QSystemTrayIcon *trayIcon_ = nullptr;
+	QMenu *menu_ = nullptr;
+	QMenu *accountsMenu_ = nullptr;
+	QMenu *statusMenu_ = nullptr;
+	QMenu *contactsMenu_ = nullptr;
+	QMenu *historyMenu_ = nullptr;
+	QActionGroup *accountsGroup_ = nullptr;
+	QActionGroup *statusGroup_ = nullptr;
+
+	DialDialog *dialDialog_ = nullptr;
+
+	/* Per-call submenus, keyed by call pointer. Created the moment a
+	 * call starts (incoming ring, or outgoing dial) and kept until
+	 * BEVENT_CALL_CLOSED -- covers the full lifecycle so there is
+	 * always a Hang Up action available for any live call.
+	 */
+	QHash<quintptr, QMenu *> callMenus_;
+
+	/* One dialpad window per call, reused/raised if already open. */
+	QHash<quintptr, QPointer<DialpadDialog>> dialpads_;
+
+	int historyLength_ = 0;
+};

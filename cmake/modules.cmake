@@ -34,7 +34,6 @@ set(MODULES
   g722
   g7221
   gst
-  gtk
   gzrtp
   httpd
   httpreq
@@ -58,6 +57,7 @@ set(MODULES
   portaudio
   presence
   pulse
+  qt
   rtcpsummary
   sdl
   selfview
