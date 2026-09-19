@@ -32,10 +32,11 @@ static QString homeBaresip()
 	return QDir::homePath() + "/.baresip";
 }
 
-/** Rewrite the (single) account line in ~/.baresip/accounts,
- *  preserving comments. Returns true on success.
+/** Rewrite specific parameters in the (single) account line in
+ *  ~/.baresip/accounts, preserving comments and unknown parameters
+ *  (e.g. outbound, 100rel, ptime, ...). Returns true on success.
  */
-static bool rewriteAccountsLine(const QString &newLine)
+static bool updateAccountsParams(const QMap<QString, QString> &updates)
 {
 	QString path = homeBaresip() + "/accounts";
 	QFile f(path);
@@ -43,22 +44,44 @@ static bool rewriteAccountsLine(const QString &newLine)
 		return false;
 
 	QStringList lines;
-	bool replaced = false;
+	bool modified = false;
 	while (!f.atEnd()) {
 		QString line = QString::fromUtf8(f.readLine());
 		QString trimmed = line.trimmed();
 		if (!trimmed.startsWith('#') && !trimmed.isEmpty()
-		    && !replaced) {
-			lines << newLine + "\n";
-			replaced = true;
-		} else {
-			lines << line;
+		    && !modified) {
+			/* Apply each update to this line. */
+			for (auto it = updates.begin(); it != updates.end(); ++it) {
+				const QString &key = it.key();
+				const QString &val = it.value();
+				QString param = QString(";%1=").arg(key);
+				int pi = line.indexOf(param);
+				if (pi >= 0) {
+					/* Replace existing value. */
+					int vi = pi + param.length();
+					int end = line.indexOf(';', vi);
+					if (end < 0) end = line.indexOf('>', vi);
+					if (end < 0) end = line.length() - 1;
+					QString oldVal = line.mid(vi, end - vi);
+					QString quoted = oldVal.startsWith('"') ? oldVal : QString();
+					QString newVal = val;
+					if (quoted.startsWith('"')) newVal = QString("\"%1\"").arg(val);
+					line.replace(vi, end - vi, newVal);
+				} else if (!val.isEmpty()) {
+					/* Insert before the closing > */
+					int gt = line.lastIndexOf('>');
+					if (gt >= 0)
+						line.insert(gt, QString(";%1=%2").arg(key, val));
+				}
+			}
+			modified = true;
 		}
+		lines << line;
 	}
 	f.close();
 
-	if (!replaced)
-		lines << newLine + "\n";
+	if (!modified)
+		return false;
 
 	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
 		return false;
@@ -264,50 +287,46 @@ void SettingsDialog::saveSettings()
 		static_cast<enum answermode>(answermode_->currentData().toInt()));
 
 	QByteArray me = mediaenc_->currentText().toUtf8();
-	if (me == "none") me = "";
-	account_set_mediaenc(acc, me.constData());
+	if (me == "none") account_set_mediaenc(acc, NULL);
+	else             account_set_mediaenc(acc, me.constData());
 
 	QByteArray mn = medianat_->currentText().toUtf8();
-	if (mn == "none") mn = "";
-	account_set_medianat(acc, mn.constData());
+	if (mn == "none") account_set_medianat(acc, NULL);
+	else              account_set_medianat(acc, mn.constData());
 
 	QByteArray ac = audioCodecs_->text().toUtf8();
 	if (!ac.isEmpty())
 		account_set_audio_codecs(acc, ac.constData());
 
-	/* Persist to ~/.baresip/accounts (rewrite the account line). */
-	QString aor = QString::fromUtf8(account_aor(acc));
-	/* Build a minimal account line preserving the SIP URI. */
-	QString user = QString::fromUtf8(account_auth_user(acc));
-	QString domain = aor;
-	int at = domain.indexOf('@');
-	if (at >= 0)
-		domain = domain.mid(at + 1);
-
-	QString line = QString("<sip:%1@%2;transport=udp>").arg(user, domain);
-	line += QString(";auth_user=%1").arg(authUser_->text());
+	/* Persist to ~/.baresip/accounts (update known params in-place,
+	 * preserving unknown params like outbound, 100rel, etc.). */
+	QMap<QString, QString> updates;
+	if (!displayName_->text().isEmpty())
+		updates["displayname"] = displayName_->text();
+	updates["auth_user"] = authUser_->text();
 	if (!authPass_->text().isEmpty())
-		line += QString(";auth_pass=%1").arg(authPass_->text());
-	line += QString(";regint=%1").arg(regint_->value());
+		updates["auth_pass"] = authPass_->text();
+	updates["regint"] = QString::number(regint_->value());
 	if (!stunHost_->text().isEmpty()) {
-		line += QString(";stunserver=stun:");
+		QString ss = "stun:";
 		if (!stunUser_->text().isEmpty())
-			line += stunUser_->text() + "@";
-		line += stunHost_->text();
+			ss += stunUser_->text() + "@";
+		ss += stunHost_->text();
 		if (stunPort_->value() != 3478)
-			line += QString(":%1").arg(stunPort_->value());
+			ss += QString(":%1").arg(stunPort_->value());
+		updates["stunserver"] = ss;
 		if (!stunPass_->text().isEmpty())
-			line += QString(";stunpass=%1").arg(stunPass_->text());
+			updates["stunpass"] = stunPass_->text();
 	}
-	line += QString(";answermode=%1").arg(answermode_->currentText().toLower());
+	updates["answermode"] = answermode_->currentText().toLower();
 	if (mediaenc_->currentText() != "none")
-		line += QString(";mediaenc=%1").arg(mediaenc_->currentText());
+		updates["mediaenc"] = mediaenc_->currentText();
 	if (medianat_->currentText() != "none")
-		line += QString(";medianat=%1").arg(medianat_->currentText());
+		updates["medianat"] = medianat_->currentText();
 	if (!audioCodecs_->text().isEmpty())
-		line += QString(";audio_codecs=%1").arg(audioCodecs_->text());
+		updates["audio_codecs"] = audioCodecs_->text();
 
-	rewriteAccountsLine(line);
+	updateAccountsParams(updates);
 
 	/* Audio device persistence: write to ~/.baresip/config. */
 	/* (Audio device changes via config require a restart; we
