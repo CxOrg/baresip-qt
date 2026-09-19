@@ -91,6 +91,17 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 			&& call_state(call) != CALL_STATE_TERMINATED
 			&& call_state(call) != CALL_STATE_ESTABLISHED;
 
+		/* Record missed/rejected calls at the event level so they
+		 * are logged regardless of how the call was initiated. */
+		if (missed)
+			QMetaObject::invokeMethod(mod->tray, "addHistory",
+				Qt::QueuedConnection,
+				Q_ARG(QString,
+					QString::fromUtf8(call_peeruri(call))),
+				Q_ARG(int, CALL_MISSED),
+				Q_ARG(QString,
+					QString::fromUtf8(call_peername(call))));
+
 		QMetaObject::invokeMethod(mod->tray, "callClosed",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),
@@ -101,6 +112,16 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	}
 
 	case BEVENT_CALL_ESTABLISHED:
+		/* Record outgoing/incoming calls at the event level so
+		 * they are logged regardless of how they were initiated
+		 * (Qt UI, ctrl_tcp, menu console, or external). */
+		QMetaObject::invokeMethod(mod->tray, "addHistory",
+			Qt::QueuedConnection,
+			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(int, call_is_outgoing(call) ? CALL_OUTGOING
+							  : CALL_INCOMING),
+			Q_ARG(QString, QString::fromUtf8(call_peername(call))));
+
 		QMetaObject::invokeMethod(mod->tray, "callEstablished",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)));
@@ -138,12 +159,9 @@ static void mqueue_handler(int id, void *data, void *arg)
 		err = ua_connect(ua, &call, NULL, uri, VIDMODE_ON);
 
 		if (mod->tray) {
-			QMetaObject::invokeMethod(mod->tray, "addHistory",
-				Qt::QueuedConnection,
-				Q_ARG(QString, QString::fromUtf8(uri)),
-				Q_ARG(int, CALL_OUTGOING),
-				Q_ARG(QString, QString()));
-
+			/* History is now recorded at the event level
+			 * (BEVENT_CALL_ESTABLISHED) so all calls are
+			 * logged regardless of how they were initiated. */
 			if (!err && call) {
 				QMetaObject::invokeMethod(mod->tray,
 					"callOutgoing", Qt::QueuedConnection,
@@ -172,14 +190,8 @@ static void mqueue_handler(int id, void *data, void *arg)
 		err = ua_answer(ua, call, VIDMODE_ON);
 
 		if (mod->tray) {
-			QMetaObject::invokeMethod(mod->tray, "addHistory",
-				Qt::QueuedConnection,
-				Q_ARG(QString,
-					QString::fromUtf8(call_peeruri(call))),
-				Q_ARG(int, CALL_INCOMING),
-				Q_ARG(QString,
-					QString::fromUtf8(call_peername(call))));
-
+			/* History is now recorded at the event level
+			 * (BEVENT_CALL_ESTABLISHED). */
 			if (err) {
 				QMetaObject::invokeMethod(mod->tray,
 					"showWarning", Qt::QueuedConnection,

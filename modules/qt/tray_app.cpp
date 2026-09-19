@@ -305,7 +305,8 @@ void TrayApp::onAnswer(quintptr callPtr)
 
 void TrayApp::onReject(quintptr callPtr, QString peerUri, QString peerName)
 {
-	addHistory(peerUri, CALL_REJECTED, peerName);
+	/* History for rejected/missed calls is now recorded at the
+	 * event level (BEVENT_CALL_CLOSED). */
 	qt_mod_hangup(reinterpret_cast<struct call *>(callPtr));
 }
 
@@ -512,7 +513,6 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 		cdlg->close();
 
 	if (missed) {
-		addHistory(peerUri, CALL_MISSED, peerName);
 		setTrayIcon("call-missed-symbolic", "call-stop");
 	}
 }
