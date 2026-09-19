@@ -78,6 +78,16 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		break;
 
 	case BEVENT_CALL_INCOMING:
+		/* Log incoming calls at ringing, even if they are
+		 * rejected/hangup before being answered. Mirrors the
+		 * outgoing-call logging at BEVENT_CALL_OUTGOING. */
+		QMetaObject::invokeMethod(mod->tray, "addHistory",
+			Qt::QueuedConnection,
+			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(int, CALL_INCOMING),
+			Q_ARG(QString,
+				QString::fromUtf8(call_peername(call))));
+
 		QMetaObject::invokeMethod(mod->tray, "callIncoming",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),
@@ -103,17 +113,6 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 			&& call_state(call) != CALL_STATE_TERMINATED
 			&& call_state(call) != CALL_STATE_ESTABLISHED;
 
-		/* Record missed/rejected calls at the event level so they
-		 * are logged regardless of how the call was initiated. */
-		if (missed)
-			QMetaObject::invokeMethod(mod->tray, "addHistory",
-				Qt::QueuedConnection,
-				Q_ARG(QString,
-					QString::fromUtf8(call_peeruri(call))),
-				Q_ARG(int, CALL_MISSED),
-				Q_ARG(QString,
-					QString::fromUtf8(call_peername(call))));
-
 		QMetaObject::invokeMethod(mod->tray, "callClosed",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),
@@ -124,17 +123,9 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	}
 
 	case BEVENT_CALL_ESTABLISHED:
-		/* Record incoming answered calls. Outgoing calls are
-		 * already logged at BEVENT_CALL_OUTGOING. */
-		if (!call_is_outgoing(call))
-			QMetaObject::invokeMethod(mod->tray, "addHistory",
-				Qt::QueuedConnection,
-				Q_ARG(QString,
-					QString::fromUtf8(call_peeruri(call))),
-				Q_ARG(int, CALL_INCOMING),
-				Q_ARG(QString,
-					QString::fromUtf8(call_peername(call))));
-
+		/* Incoming calls are already logged at BEVENT_CALL_INCOMING
+		 * (ringing) so they appear in history even if rejected.
+		 * Outgoing calls are logged at BEVENT_CALL_OUTGOING. */
 		QMetaObject::invokeMethod(mod->tray, "callEstablished",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)));
