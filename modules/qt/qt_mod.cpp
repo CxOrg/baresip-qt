@@ -85,6 +85,18 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 			Q_ARG(QString, QString::fromUtf8(call_peername(call))));
 		break;
 
+	case BEVENT_CALL_OUTGOING:
+		/* Log dialed numbers immediately, even if the call never
+		 * connects. This captures all outgoing calls regardless
+		 * of how they were initiated (Qt UI, ctrl_tcp, menu). */
+		QMetaObject::invokeMethod(mod->tray, "addHistory",
+			Qt::QueuedConnection,
+			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(int, CALL_OUTGOING),
+			Q_ARG(QString,
+				QString::fromUtf8(call_peername(call))));
+		break;
+
 	case BEVENT_CALL_CLOSED:
 	{
 		bool missed = !call_is_outgoing(call)
@@ -112,15 +124,16 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	}
 
 	case BEVENT_CALL_ESTABLISHED:
-		/* Record outgoing/incoming calls at the event level so
-		 * they are logged regardless of how they were initiated
-		 * (Qt UI, ctrl_tcp, menu console, or external). */
-		QMetaObject::invokeMethod(mod->tray, "addHistory",
-			Qt::QueuedConnection,
-			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
-			Q_ARG(int, call_is_outgoing(call) ? CALL_OUTGOING
-							  : CALL_INCOMING),
-			Q_ARG(QString, QString::fromUtf8(call_peername(call))));
+		/* Record incoming answered calls. Outgoing calls are
+		 * already logged at BEVENT_CALL_OUTGOING. */
+		if (!call_is_outgoing(call))
+			QMetaObject::invokeMethod(mod->tray, "addHistory",
+				Qt::QueuedConnection,
+				Q_ARG(QString,
+					QString::fromUtf8(call_peeruri(call))),
+				Q_ARG(int, CALL_INCOMING),
+				Q_ARG(QString,
+					QString::fromUtf8(call_peername(call))));
 
 		QMetaObject::invokeMethod(mod->tray, "callEstablished",
 			Qt::QueuedConnection,
