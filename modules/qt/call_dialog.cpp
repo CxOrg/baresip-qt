@@ -3,6 +3,7 @@
  */
 #include "call_dialog.h"
 #include "call_history.h"
+#include "qt_mod.h"
 
 #include <QLineEdit>
 #include <QPushButton>
