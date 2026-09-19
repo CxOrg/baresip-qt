@@ -8,27 +8,24 @@ url="https://github.com"
 license=('BSD-3-Clause')
 
 depends=('qt6-base' 'libre' 'openssl' 'opus')
-makedepends=('cmake')
+makedepends=('cmake' 'git')
 
 provides=('baresip')
 conflicts=('baresip')
 
-# Point directly to the stable release archive you just generated on GitHub
-source=("https://github.com/archive/refs/tags/v4.10.0-qt1.tar.gz")
-
-# Crucial for security! This ensures nobody tampers with your download file
-sha256sums=('GENERATE_THIS_IN_THE_NEXT_STEP')
+# Build from the local source tree (this repository).
+source=("git+file://${PWD}#commit=8665b8e2")
+sha256sums=('SKIP')
 
 build() {
-  # GitHub extracts the folder as repository_name-tag_name
-  cmake -B build -S "${srcdir}/baresip-4.10.0-qt1" \
+  # No -DMODULES override: build all modules whose deps are available
+  # (each module's CMakeLists auto-skips when its deps are missing).
+  cmake -B build -S "${srcdir}/${pkgname}" \
     -DCMAKE_BUILD_TYPE=None \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DMODULES="qt_applet;account;contact;opus;srtp"
+    -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build build
 }
 
 package() {
   cmake --install build --prefix="${pkgdir}/usr"
 }
-
