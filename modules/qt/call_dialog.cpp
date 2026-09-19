@@ -216,6 +216,16 @@ void CallDialog::setStateInCall(const QString &peerUri)
 }
 
 
+void CallDialog::setStateDialing()
+{
+	callPtr_ = 0;
+	peerName_.clear();
+	isOutgoing_ = false;
+	state_ = State::Dialing;
+	applyState();
+}
+
+
 void CallDialog::setStateIncoming(quintptr callPtr, const QString &peerUri,
 				  const QString &peerName)
 {

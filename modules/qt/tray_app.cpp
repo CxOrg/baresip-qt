@@ -427,9 +427,19 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 	refreshTrayMenu();
 
 	/* Pop up a non-modal call-control dialog with green=Answer,
-	 * red=Hangup. */
-	auto *dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
-				   peerUri, peerName);
+	 * red=Hangup. If the idle Dialing dialog is currently visible,
+	 * repurpose it instead of opening a second window. */
+	CallDialog *dlg = nullptr;
+	if (idleCallDialog_ && idleCallDialog_->isVisible()) {
+		dlg = idleCallDialog_;
+		/* Disconnect the Dialing-state callRequested signal;
+		 * the dialog will now emit answerRequested/hangupRequested. */
+		disconnect(dlg, &CallDialog::callRequested, this, nullptr);
+		dlg->setStateIncoming(callPtr, peerUri, peerName);
+	} else {
+		dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
+				     peerUri, peerName);
+	}
 	callDialogs_.insert(callPtr, dlg);
 
 	connect(dlg, &CallDialog::answerRequested,
@@ -441,7 +451,9 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 			openDialpad(cp, label);
 		});
 
-	dlg->show();
+	if (dlg != idleCallDialog_) {
+		dlg->show();
+	}
 	dlg->raise();
 	dlg->activateWindow();
 
@@ -505,8 +517,24 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 		dlg->close();
 
 	QPointer<CallDialog> cdlg = callDialogs_.take(callPtr);
-	if (cdlg)
-		cdlg->close();
+	if (cdlg) {
+		/* If this was the repurposed idle dialog, reset it to the
+		 * Dialing state so it can be reused; otherwise close it. */
+		if (cdlg == idleCallDialog_) {
+			disconnect(cdlg, &CallDialog::answerRequested, this, nullptr);
+			disconnect(cdlg, &CallDialog::hangupRequested, this, nullptr);
+			disconnect(cdlg, &CallDialog::dialpadRequested, this, nullptr);
+			cdlg->setStateDialing();
+			/* Re-wire the green button for outgoing calls. */
+			connect(cdlg, &CallDialog::callRequested,
+				this, [this](QString uri) {
+				QByteArray u = uri.toUtf8();
+				qt_mod_connect(u.constData());
+			});
+		} else {
+			cdlg->close();
+		}
+	}
 
 	if (missed) {
 		setTrayIcon("call-missed-symbolic", "call-stop");

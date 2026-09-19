@@ -49,6 +49,10 @@ public:
 	 *  after an outgoing call connects). */
 	void setStateInCall(const QString &peerUri);
 
+	/** Reset an existing dialog back to Dialing (used when a
+	 *  repurposed idle dialog's call ends). */
+	void setStateDialing();
+
 	/** Switch an existing dialog to Incoming (used if a Dialing
 	 *  dialog is repurposed for an incoming call). */
 	void setStateIncoming(quintptr callPtr, const QString &peerUri,
