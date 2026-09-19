@@ -61,3 +61,13 @@ install_manifest.txt
 
 # Visual Studio Code
 .vscode/*
+
+# makepkg / Arch packaging artifacts
+/src/
+/pkg/
+/baresip-qt/
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+*.log
+*.log.*
