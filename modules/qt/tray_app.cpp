@@ -4,6 +4,7 @@
 #include "tray_app.h"
 #include "call_dialog.h"
 #include "call_history.h"
+#include "settings_dialog.h"
 #include "dialpad_dialog.h"
 
 #include <QMessageBox>
@@ -33,6 +34,7 @@ TrayApp::TrayApp(struct qt_mod *mod, QObject *parent)
 TrayApp::~TrayApp()
 {
 	delete idleCallDialog_;
+	delete settingsDialog_;
 }
 
 
@@ -114,6 +116,9 @@ void TrayApp::buildMenu()
 
 	QAction *aboutAct = menu_->addAction("About");
 	connect(aboutAct, &QAction::triggered, this, &TrayApp::onAbout);
+
+	QAction *settingsAct = menu_->addAction("Settings...");
+	connect(settingsAct, &QAction::triggered, this, &TrayApp::onSettings);
 
 	menu_->addSeparator();
 
@@ -244,6 +249,17 @@ void TrayApp::onAbout()
 void TrayApp::onQuit()
 {
 	qt_mod_quit();
+}
+
+
+void TrayApp::onSettings()
+{
+	if (!settingsDialog_)
+		settingsDialog_ = new SettingsDialog();
+
+	settingsDialog_->show();
+	settingsDialog_->raise();
+	settingsDialog_->activateWindow();
 }
 
 
