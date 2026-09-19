@@ -164,11 +164,11 @@ void SettingsDialog::buildUi()
 	struct le *le;
 	for (le = list_head(ausrcl); le; le = le->next) {
 		struct ausrc *as = static_cast<struct ausrc *>(le->data);
-		audioSrc_->addItem(QString::fromUtf8(ausrc_name(as)));
+		audioSrc_->addItem(QString::fromUtf8(as->name));
 	}
 	for (le = list_head(auplayl); le; le = le->next) {
 		struct auplay *ap = static_cast<struct auplay *>(le->data);
-		audioPlayer_->addItem(QString::fromUtf8(auplay_name(ap)));
+		audioPlayer_->addItem(QString::fromUtf8(ap->name));
 	}
 
 	aform->addRow("Audio source:",  audioSrc_);
