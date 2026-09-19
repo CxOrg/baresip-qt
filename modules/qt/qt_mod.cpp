@@ -13,6 +13,35 @@
 
 #include <QApplication>
 #include <QMetaObject>
+#include <QString>
+
+
+/** Extract the user part (phone number) from a SIP URI for history.
+ *  "sip:+441234567890@domain;transport=udp" -> "+441234567890"
+ *  "sip:bob@example.com"                     -> "bob"
+ *  "+441234567890"                           -> "+441234567890"
+ *  The full SIP URI is reconstructed on dialing via
+ *  account_uri_complete_strdup().
+ */
+static QString uriToNumber(const char *uri)
+{
+	QString s = QString::fromUtf8(uri).trimmed();
+
+	if (s.startsWith("sip:", Qt::CaseInsensitive))
+		s = s.mid(4);
+	else if (s.startsWith("sips:", Qt::CaseInsensitive))
+		s = s.mid(5);
+
+	int semi = s.indexOf(';');
+	if (semi >= 0)
+		s = s.left(semi);
+
+	int at = s.indexOf('@');
+	if (at >= 0)
+		s = s.left(at);
+
+	return s.trimmed();
+}
 
 
 /**
@@ -80,10 +109,12 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	case BEVENT_CALL_INCOMING:
 		/* Log incoming calls at ringing, even if they are
 		 * rejected/hangup before being answered. Mirrors the
-		 * outgoing-call logging at BEVENT_CALL_OUTGOING. */
+		 * outgoing-call logging at BEVENT_CALL_OUTGOING.
+		 * Store just the phone number; the full SIP URI is
+		 * reconstructed on dialing. */
 		QMetaObject::invokeMethod(mod->tray, "addHistory",
 			Qt::QueuedConnection,
-			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(QString, uriToNumber(call_peeruri(call))),
 			Q_ARG(int, CALL_INCOMING),
 			Q_ARG(QString,
 				QString::fromUtf8(call_peername(call))));
@@ -97,11 +128,11 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 
 	case BEVENT_CALL_OUTGOING:
 		/* Log dialed numbers immediately, even if the call never
-		 * connects. This captures all outgoing calls regardless
-		 * of how they were initiated (Qt UI, ctrl_tcp, menu). */
+		 * connects. Store just the phone number; the full SIP URI
+		 * is reconstructed on dialing. */
 		QMetaObject::invokeMethod(mod->tray, "addHistory",
 			Qt::QueuedConnection,
-			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(QString, uriToNumber(call_peeruri(call))),
 			Q_ARG(int, CALL_OUTGOING),
 			Q_ARG(QString,
 				QString::fromUtf8(call_peername(call))));

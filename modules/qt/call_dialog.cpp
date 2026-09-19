@@ -14,38 +14,6 @@
 #include <QListWidgetItem>
 #include <QPalette>
 #include <QIcon>
-#include <QRegularExpression>
-
-
-/* ---- URI -> display number ---------------------------------------- */
-
-/** Extract the user part (phone number) from a SIP URI for display.
- *  "sip:+441234567890@domain;transport=udp" -> "+441234567890"
- *  "sip:bob@example.com"                     -> "bob"
- *  "+441234567890"                           -> "+441234567890"
- */
-static QString uriToNumber(const QString &uri)
-{
-	QString s = uri.trimmed();
-
-	/* Strip "sip:" / "sips:" scheme. */
-	if (s.startsWith("sip:", Qt::CaseInsensitive))
-		s = s.mid(4);
-	else if (s.startsWith("sips:", Qt::CaseInsensitive))
-		s = s.mid(5);
-
-	/* Strip parameters: ";transport=udp" etc. */
-	int semi = s.indexOf(';');
-	if (semi >= 0)
-		s = s.left(semi);
-
-	/* Strip host: keep only the user part before '@'. */
-	int at = s.indexOf('@');
-	if (at >= 0)
-		s = s.left(at);
-
-	return s.trimmed();
-}
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -327,7 +295,7 @@ void CallDialog::refreshHistory()
 		}
 
 		QString label = e.info.isEmpty()
-			? QString("%1  %2").arg(uriToNumber(e.uri),
+			? QString("%1  %2").arg(e.uri,
 				e.ts.toString("MM-dd hh:mm"))
 			: QString("%1  %2").arg(e.info,
 				e.ts.toString("MM-dd hh:mm"));
@@ -338,8 +306,9 @@ void CallDialog::refreshHistory()
 			ic = QIcon::fromTheme(fallback);
 		if (!ic.isNull())
 			item->setIcon(ic);
-		/* Stash the full URI for click-to-fill (dialing needs the
-		 * full URI; display uses the stripped number). */
+		/* Stash the number for click-to-fill. The history CSV now
+		 * stores just the phone number; the full SIP URI is
+		 * reconstructed by qt_mod_connect on dialing. */
 		item->setData(Qt::UserRole, e.uri);
 		historyList_->addItem(item);
 	}
