@@ -2,7 +2,6 @@
  * @file qt/tray_app.cpp Qt UI module -- tray icon + menu
  */
 #include "tray_app.h"
-#include "dial_dialog.h"
 #include "call_dialog.h"
 #include "dialpad_dialog.h"
 
@@ -32,7 +31,6 @@ TrayApp::TrayApp(struct qt_mod *mod, QObject *parent)
 
 TrayApp::~TrayApp()
 {
-	delete dialDialog_;
 	delete idleCallDialog_;
 }
 

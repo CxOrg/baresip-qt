@@ -73,8 +73,6 @@ private:
 	QActionGroup *accountsGroup_ = nullptr;
 	QActionGroup *statusGroup_ = nullptr;
 
-	DialDialog *dialDialog_ = nullptr;
-
 	/* Unified call-control dialog. One per active call (keyed by
 	 * call pointer), plus a singleton for the idle "Dial" state. */
 	CallDialog *idleCallDialog_ = nullptr;
