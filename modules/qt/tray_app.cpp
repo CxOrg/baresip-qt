@@ -3,6 +3,7 @@
  */
 #include "tray_app.h"
 #include "dial_dialog.h"
+#include "call_dialog.h"
 #include "dialpad_dialog.h"
 
 #include <QMessageBox>
@@ -32,6 +33,7 @@ TrayApp::TrayApp(struct qt_mod *mod, QObject *parent)
 TrayApp::~TrayApp()
 {
 	delete dialDialog_;
+	delete idleCallDialog_;
 }
 
 
@@ -204,14 +206,24 @@ void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 
 void TrayApp::onDial()
 {
-	if (!dialDialog_)
-		dialDialog_ = new DialDialog();
+	/* Reuse a single idle Dialing dialog so repeated clicks don't
+	 * pile up multiple windows. Non-modal (show, not exec) avoids
+	 * Qt's "Recursive call detected" warning when an incoming call
+	 * arrives while a dialog is open. */
+	if (!idleCallDialog_)
+		idleCallDialog_ = new CallDialog();
 
-	QString uri;
-	if (dialDialog_->getUri(uri)) {
+	/* Wire up the green button -- place the call when clicked. */
+	disconnect(idleCallDialog_, nullptr, this, nullptr);
+	connect(idleCallDialog_, &CallDialog::callRequested,
+		this, [this](QString uri) {
 		QByteArray u = uri.toUtf8();
 		qt_mod_connect(u.constData());
-	}
+	});
+
+	idleCallDialog_->show();
+	idleCallDialog_->raise();
+	idleCallDialog_->activateWindow();
 }
 
 
@@ -414,6 +426,29 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 	callMenus_.insert(callPtr, callMenu);
 	refreshTrayMenu();
 
+	/* Pop up a non-modal call-control dialog with green=Accept,
+	 * red=Reject. */
+	auto *dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
+				   peerUri, peerName);
+	callDialogs_.insert(callPtr, dlg);
+
+	connect(dlg, &CallDialog::answerRequested,
+		this, [this, callPtr]() { onAnswer(callPtr); });
+	connect(dlg, &CallDialog::rejectRequested,
+		this, [this, callPtr, peerUri, peerName]() {
+			onReject(callPtr, peerUri, peerName);
+		});
+	connect(dlg, &CallDialog::hangupRequested,
+		this, [this, callPtr]() { onHangup(callPtr); });
+	connect(dlg, &CallDialog::dialpadRequested,
+		this, [this](quintptr cp, QString label) {
+			openDialpad(cp, label);
+		});
+
+	dlg->show();
+	dlg->raise();
+	dlg->activateWindow();
+
 	trayIcon_->showMessage("Incoming call",
 				QString("%1 <%2>").arg(peerName, peerUri),
 				QSystemTrayIcon::Information, 10000);
@@ -439,6 +474,23 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 	menu_->insertMenu(menu_->actions().first(), callMenu);
 	callMenus_.insert(callPtr, callMenu);
 	refreshTrayMenu();
+
+	/* Pop up a non-modal call-control dialog in InCall (ringing-out)
+	 * state: red=Hang Up, plus Dialpad access. */
+	auto *dlg = new CallDialog(CallDialog::State::InCall, callPtr,
+				   peerUri, QString());
+	callDialogs_.insert(callPtr, dlg);
+
+	connect(dlg, &CallDialog::hangupRequested,
+		this, [this, callPtr]() { onHangup(callPtr); });
+	connect(dlg, &CallDialog::dialpadRequested,
+		this, [this](quintptr cp, QString label) {
+			openDialpad(cp, label);
+		});
+
+	dlg->show();
+	dlg->raise();
+	dlg->activateWindow();
 }
 
 
@@ -455,6 +507,10 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 	QPointer<DialpadDialog> dlg = dialpads_.take(callPtr);
 	if (dlg)
 		dlg->close();
+
+	QPointer<CallDialog> cdlg = callDialogs_.take(callPtr);
+	if (cdlg)
+		cdlg->close();
 
 	if (missed) {
 		addHistory(peerUri, CALL_MISSED, peerName);
@@ -473,6 +529,14 @@ void TrayApp::callEstablished(quintptr callPtr)
 		QList<QAction *> acts = callMenu->actions();
 		QString peerUri = acts.isEmpty() ? QString() : acts.first()->text();
 		convertToHangup(callPtr, peerUri);
+	}
+
+	/* Transition the call-control dialog to InCall (Connected). */
+	QPointer<CallDialog> cdlg = callDialogs_.value(callPtr, nullptr);
+	if (cdlg) {
+		QList<QAction *> acts = callMenu ? callMenu->actions() : QList<QAction*>();
+		QString peerUri = acts.isEmpty() ? QString() : acts.first()->text();
+		cdlg->setStateInCall(peerUri);
 	}
 
 	setTrayIcon("call-start", QString());

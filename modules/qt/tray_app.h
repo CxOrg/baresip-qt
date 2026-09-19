@@ -11,7 +11,7 @@
 #include <QHash>
 #include <QPointer>
 
-class DialDialog;
+class CallDialog;
 class DialpadDialog;
 
 class TrayApp : public QObject {
@@ -74,6 +74,11 @@ private:
 	QActionGroup *statusGroup_ = nullptr;
 
 	DialDialog *dialDialog_ = nullptr;
+
+	/* Unified call-control dialog. One per active call (keyed by
+	 * call pointer), plus a singleton for the idle "Dial" state. */
+	CallDialog *idleCallDialog_ = nullptr;
+	QHash<quintptr, QPointer<CallDialog>> callDialogs_;
 
 	/* Per-call submenus, keyed by call pointer. Created the moment a
 	 * call starts (incoming ring, or outgoing dial) and kept until
