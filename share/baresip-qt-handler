@@ -50,7 +50,9 @@ send_via_ctrl_tcp() {
 	if command -v nc >/dev/null 2>&1; then
 		printf '%s' "$frame" | nc -w 1 "$CTRL_HOST" "$CTRL_PORT" >/dev/null 2>&1
 	elif command -v ncat >/dev/null 2>&1; then
-		printf '%s' "$frame" | ncat --send-only -w 1 "$CTRL_HOST" "$CTRL_PORT" >/dev/null 2>&1
+		# Read the response so baresip doesn't log a broken pipe;
+		# -w 1 caps the wait at 1s.
+		printf '%s' "$frame" | ncat -w 1 "$CTRL_HOST" "$CTRL_PORT" >/dev/null 2>&1
 	else
 		return 1
 	fi
