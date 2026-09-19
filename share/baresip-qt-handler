@@ -1,0 +1,64 @@
+#!/bin/sh
+# baresip-qt-handler -- freedesktop x-scheme-handler/tel handler.
+#
+# Invoked by the desktop environment / browser when the user clicks a
+# "tel:<number>" link. Strips the "tel:" scheme (and any "sip:" scheme),
+# then forwards the number to the running baresip instance via the
+# ctrl_tcp module (netstring-framed JSON on 127.0.0.1:4444). If no
+# instance is reachable, falls back to launching baresip with a "dial"
+# command so a fresh instance places the call.
+#
+# The number is passed to baresip's "dial" command; baresip's
+# account_uri_complete_strdup() will prepend "sip:" and append the
+# account domain if the URI has no scheme/host, so a bare E.164 number
+# like "+441234567890" becomes "sip:+441234567890@<account-domain>".
+
+set -eu
+
+CTRL_HOST=127.0.0.1
+CTRL_PORT=4444
+
+# No argument: launched from the application menu -- just start baresip.
+if [ $# -eq 0 ]; then
+	exec env GDK_BACKEND=x11 baresip
+fi
+
+uri=$1
+
+# Strip leading scheme: tel:, sip:, tel://, sip://
+case $uri in
+	tel:*)    uri=${uri#tel:} ;;
+	sip:*)    uri=${uri#sip:} ;;
+esac
+uri=${uri#//}
+
+# Strip any URL-encoded spaces / dashes / parentheses that browsers may
+# leave in place. Keep '+', digits, '#', '*', ','.
+uri=$(printf %s "$uri" | sed -E 's/[[:space:]()-]//g; s/%20//g')
+
+[ -n "$uri" ] || { echo "baresip-qt-handler: empty number" >&2; exit 1; }
+
+json=$(printf '{"command":"dial","params":"%s"}' "$uri")
+# netstring frame: <len>:<payload>,
+len=${#json}
+frame=$(printf '%s:%s,' "$len" "$json")
+
+send_via_ctrl_tcp() {
+	# Returns 0 if a baresip ctrl_tcp instance accepted the command.
+	# Uses a short connect timeout so the fallback path is quick when
+	# no instance is running.
+	if command -v nc >/dev/null 2>&1; then
+		printf '%s' "$frame" | nc -w 1 "$CTRL_HOST" "$CTRL_PORT" >/dev/null 2>&1
+	elif command -v ncat >/dev/null 2>&1; then
+		printf '%s' "$frame" | ncat --send-only -w 1 "$CTRL_HOST" "$CTRL_PORT" >/dev/null 2>&1
+	else
+		return 1
+	fi
+}
+
+if send_via_ctrl_tcp; then
+	exit 0
+fi
+
+# Fallback: no running instance (or ctrl_tcp not enabled) -- launch one.
+exec baresip -e "dial $uri"

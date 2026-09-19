@@ -402,6 +402,12 @@ install(FILES ${DESKTOP_FILES}
   COMPONENT Applications
 )
 
+# tel: URI handler script (freedesktop x-scheme-handler/tel)
+install(PROGRAMS ${PROJECT_SOURCE_DIR}/share/baresip-qt-handler
+  DESTINATION ${CMAKE_INSTALL_BINDIR}
+  COMPONENT Applications
+)
+
 
 ##############################################################################
 #
