@@ -2,12 +2,15 @@
  * @file qt/call_dialog.cpp Qt UI module -- unified call control dialog
  */
 #include "call_dialog.h"
+#include "call_history.h"
 
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QPalette>
 #include <QIcon>
 
@@ -92,6 +95,19 @@ void CallDialog::buildUi()
 	connect(dialpadBtn_, &QPushButton::clicked,
 		this, &CallDialog::onDialpad);
 
+	/* Call history list (shown only in Dialing state). */
+	historyList_ = new QListWidget(this);
+	historyList_->setMaximumHeight(120);
+	historyList_->setMinimumHeight(60);
+	historyList_->setUniformItemSizes(true);
+	/* Show ~10 entries before scrolling. */
+	historyList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	layout->addWidget(historyList_);
+	connect(historyList_, &QListWidget::itemClicked,
+		this, &CallDialog::onHistoryClicked);
+	connect(historyList_, &QListWidget::itemDoubleClicked,
+		this, &CallDialog::onHistoryDoubleClicked);
+
 	/* Button row: green on the left, red on the right. */
 	auto *btnRow = new QHBoxLayout();
 	layout->addLayout(btnRow);
@@ -106,7 +122,7 @@ void CallDialog::buildUi()
 	connect(redBtn_, &QPushButton::clicked,
 		this, &CallDialog::onRed);
 
-	resize(340, 140);
+	resize(340, 320);
 }
 
 
@@ -124,6 +140,8 @@ void CallDialog::applyState()
 		greenBtn_->setEnabled(true);
 		redBtn_->setText("Cancel");
 		dialpadBtn_->hide();
+		historyList_->show();
+		refreshHistory();
 		break;
 
 	case State::Incoming:
@@ -134,6 +152,7 @@ void CallDialog::applyState()
 		greenBtn_->setEnabled(true);
 		redBtn_->setText("Reject");
 		dialpadBtn_->hide();
+		historyList_->hide();
 		break;
 
 	case State::InCall:
@@ -145,6 +164,7 @@ void CallDialog::applyState()
 		greenBtn_->setEnabled(false);
 		redBtn_->setText("Hang Up");
 		dialpadBtn_->show();
+		historyList_->hide();
 		break;
 	}
 }
@@ -223,4 +243,78 @@ void CallDialog::onDialpad()
 {
 	emit dialpadRequested(callPtr_,
 		uriEdit_->text().isEmpty() ? peerName_ : uriEdit_->text());
+}
+
+
+void CallDialog::refreshHistory()
+{
+	if (!historyList_)
+		return;
+
+	historyList_->clear();
+
+	/* Most recent first; show up to 10 entries. */
+	auto entries = CallHistory::instance()->recent(10);
+	/* Display newest at top. */
+	for (int i = entries.size() - 1; i >= 0; --i) {
+		const CallHistoryEntry &e = entries[i];
+
+		QString iconName, fallback;
+		switch (e.type) {
+		case CALL_INCOMING:
+			iconName = "call-incoming-symbolic"; fallback = "go-next";
+			break;
+		case CALL_OUTGOING:
+			iconName = "call-outgoing-symbolic"; fallback = "go-previous";
+			break;
+		case CALL_MISSED:
+			iconName = "call-missed-symbolic"; fallback = "call-stop";
+			break;
+		case CALL_REJECTED:
+			iconName = "window-close"; fallback = "call-stop";
+			break;
+		default:
+			iconName = "call-start"; fallback = QString();
+			break;
+		}
+
+		QString label = e.info.isEmpty()
+			? QString("%1  %2").arg(e.uri,
+				e.ts.toString("MM-dd hh:mm"))
+			: QString("%1 <%2>  %3").arg(e.info, e.uri,
+				e.ts.toString("MM-dd hh:mm"));
+
+		auto *item = new QListWidgetItem(label);
+		QIcon ic = QIcon::fromTheme(iconName);
+		if (ic.isNull() && !fallback.isEmpty())
+			ic = QIcon::fromTheme(fallback);
+		if (!ic.isNull())
+			item->setIcon(ic);
+		/* Stash the URI for click-to-fill. */
+		item->setData(Qt::UserRole, e.uri);
+		historyList_->addItem(item);
+	}
+}
+
+
+void CallDialog::onHistoryClicked(QListWidgetItem *item)
+{
+	if (!item)
+		return;
+	QString uri = item->data(Qt::UserRole).toString();
+	if (!uri.isEmpty())
+		uriEdit_->setText(uri);
+}
+
+
+void CallDialog::onHistoryDoubleClicked(QListWidgetItem *item)
+{
+	if (!item)
+		return;
+	QString uri = item->data(Qt::UserRole).toString();
+	if (uri.isEmpty())
+		return;
+	uriEdit_->setText(uri);
+	/* Double-click = dial immediately. */
+	onGreen();
 }

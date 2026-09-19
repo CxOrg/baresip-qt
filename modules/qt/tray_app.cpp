@@ -3,6 +3,7 @@
  */
 #include "tray_app.h"
 #include "call_dialog.h"
+#include "call_history.h"
 #include "dialpad_dialog.h"
 
 #include <QMessageBox>
@@ -543,6 +544,12 @@ void TrayApp::callEstablished(quintptr callPtr)
 
 void TrayApp::addHistory(QString uri, int callType, QString info)
 {
+	/* Persist to ~/.baresip/call_history.csv and refresh the idle
+	 * CallDialog's history list if it's open. */
+	CallHistory::instance()->add(uri, callType, info);
+	if (idleCallDialog_)
+		idleCallDialog_->refreshHistory();
+
 	QString iconName, fallback;
 
 	switch (callType) {

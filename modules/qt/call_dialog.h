@@ -18,6 +18,8 @@
 
 class QLineEdit;
 class QPushButton;
+class QListWidget;
+class QListWidgetItem;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -33,6 +35,10 @@ public:
 	 *  If `prefill` is non-empty the entry is populated but the call
 	 *  is NOT placed until the green button is clicked. */
 	explicit CallDialog(QWidget *parent = nullptr);
+
+	/** Refresh the history list from the persistent store. Only
+	 *  shown in Dialing state. */
+	void refreshHistory();
 
 	/** Incoming/InCall state: read-only entry showing the peer URI. */
 	CallDialog(State state, quintptr callPtr, const QString &peerUri,
@@ -76,9 +82,12 @@ private:
 	QPushButton  *greenBtn_   = nullptr;
 	QPushButton  *redBtn_     = nullptr;
 	QPushButton  *dialpadBtn_ = nullptr;
+	QListWidget  *historyList_ = nullptr;
 
 private slots:
 	void onGreen();
 	void onRed();
 	void onDialpad();
+	void onHistoryClicked(QListWidgetItem *item);
+	void onHistoryDoubleClicked(QListWidgetItem *item);
 };
