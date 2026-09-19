@@ -4,8 +4,9 @@
  * A single non-modal dialog that adapts to three call states:
  *
  *  - Dialing:   number entry editable; green=Call, red=Cancel
- *  - Incoming:  number read-only;      green=Accept, red=Reject
- *  - InCall:    number read-only;     red=Hang Up, optional Dialpad
+ *  - Incoming:  number read-only;      green=Answer, red=Hangup
+ *  - InCall:    number read-only;     green=Call/Answer (disabled),
+ *               red=Hangup, optional Dialpad
  *
  * The dialog is non-modal (show(), not exec()) so it can coexist
  * with tray menus and multiple simultaneous calls without triggering
@@ -77,6 +78,7 @@ private:
 	State state_;
 	quintptr callPtr_ = 0;
 	QString peerName_;
+	bool isOutgoing_ = false;  /**< direction for InCall label */
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;

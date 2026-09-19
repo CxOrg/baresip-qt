@@ -426,18 +426,14 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 	callMenus_.insert(callPtr, callMenu);
 	refreshTrayMenu();
 
-	/* Pop up a non-modal call-control dialog with green=Accept,
-	 * red=Reject. */
+	/* Pop up a non-modal call-control dialog with green=Answer,
+	 * red=Hangup. */
 	auto *dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
 				   peerUri, peerName);
 	callDialogs_.insert(callPtr, dlg);
 
 	connect(dlg, &CallDialog::answerRequested,
 		this, [this, callPtr]() { onAnswer(callPtr); });
-	connect(dlg, &CallDialog::rejectRequested,
-		this, [this, callPtr, peerUri, peerName]() {
-			onReject(callPtr, peerUri, peerName);
-		});
 	connect(dlg, &CallDialog::hangupRequested,
 		this, [this, callPtr]() { onHangup(callPtr); });
 	connect(dlg, &CallDialog::dialpadRequested,
@@ -476,7 +472,7 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 	refreshTrayMenu();
 
 	/* Pop up a non-modal call-control dialog in InCall (ringing-out)
-	 * state: red=Hang Up, plus Dialpad access. */
+	 * state: green=Call (disabled), red=Hangup, plus Dialpad. */
 	auto *dlg = new CallDialog(CallDialog::State::InCall, callPtr,
 				   peerUri, QString());
 	callDialogs_.insert(callPtr, dlg);
