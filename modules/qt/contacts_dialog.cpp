@@ -175,14 +175,12 @@ void ContactsDialog::setupLayerShell()
 
 
 /** Build one tab page: a stacked widget holding the list (page 0)
- *  and the overlay edit form (page 1). An "Add" button below the
- *  list and a "Delete" button on the form are created only when the
- *  corresponding output pointers are non-null. */
+ *  and the overlay edit form (page 1). A "Delete" button on the form
+ *  is created only when delBtn is non-null. */
 static QStackedWidget *buildTabPage(QListWidget **list,
 				    QLineEdit **nameEdit, QLineEdit **numEdit,
 				    QPushButton **saveBtn, QPushButton **backBtn,
-				    QPushButton **delBtn, QPushButton **addBtn,
-				    QWidget *parent)
+				    QPushButton **delBtn, QWidget *parent)
 {
 	auto *stack = new QStackedWidget(parent);
 
@@ -190,14 +188,9 @@ static QStackedWidget *buildTabPage(QListWidget **list,
 	auto *listLay = new QVBoxLayout(listPage);
 	listLay->setContentsMargins(0, 0, 0, 0);
 	*list = new QListWidget(listPage);
+	(*list)->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	(*list)->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	listLay->addWidget(*list);
-	if (addBtn) {
-		auto *addRow = new QHBoxLayout();
-		addRow->addStretch();
-		*addBtn = new QPushButton("Add", listPage);
-		addRow->addWidget(*addBtn);
-		listLay->addLayout(addRow);
-	}
 	stack->addWidget(listPage);
 
 	auto *formPage = new QWidget(stack);
@@ -251,10 +244,10 @@ void ContactsDialog::buildUi()
 	layout->addWidget(tabs_);
 
 	/* ---- Contacts tab ---- */
-	QPushButton *cSave, *cBack, *cDel, *cAdd;
+	QPushButton *cSave, *cBack, *cDel;
 	contactsStack_ = buildTabPage(&contactsList_, &cNameEdit_,
 				      &cNumEdit_, &cSave, &cBack,
-				      &cDel, &cAdd, tabs_);
+				      &cDel, tabs_);
 	tabs_->addTab(contactsStack_, "Contacts");
 
 	connect(contactsList_, &QListWidget::itemClicked,
@@ -265,19 +258,12 @@ void ContactsDialog::buildUi()
 		this, &ContactsDialog::onDeleteContact);
 	connect(cBack, &QPushButton::clicked,
 		this, &ContactsDialog::onCancelContactEdit);
-	connect(cAdd, &QPushButton::clicked, this, [this]() {
-		/* Add mode: empty form, editingIndex_ -1. */
-		editingIndex_ = -1;
-		cNameEdit_->clear();
-		cNumEdit_->clear();
-		contactsStack_->setCurrentIndex(1);
-	});
 
 	/* ---- History tab ---- */
 	QPushButton *hSave, *hBack;
 	historyStack_ = buildTabPage(&historyList_, &hNameEdit_,
 				     &hNumEdit_, &hSave, &hBack,
-				     nullptr, nullptr, tabs_);
+				     nullptr, tabs_);
 	tabs_->addTab(historyStack_, "History");
 
 	connect(historyList_, &QListWidget::itemClicked,
@@ -290,13 +276,24 @@ void ContactsDialog::buildUi()
 	connect(tabs_, &QTabWidget::currentChanged,
 		this, &ContactsDialog::onTabChanged);
 
-	/* ---- Close button ---- */
+	/* ---- Bottom row: Add (contacts) left, Close right ---- */
 	auto *btnRow = new QHBoxLayout();
 	layout->addLayout(btnRow);
+	auto *addBtn = new QPushButton("Add", panel);
 	auto *closeBtn = new QPushButton("Close", panel);
+	btnRow->addWidget(addBtn);
 	btnRow->addStretch();
 	btnRow->addWidget(closeBtn);
 	connect(closeBtn, &QPushButton::clicked, this, &QDialog::reject);
+	connect(addBtn, &QPushButton::clicked, this, [this]() {
+		/* Add mode: switch to the Contacts tab and open the
+		 * overlay with empty fields (editingIndex_ -1). */
+		tabs_->setCurrentIndex(0);
+		editingIndex_ = -1;
+		cNameEdit_->clear();
+		cNumEdit_->clear();
+		contactsStack_->setCurrentIndex(1);
+	});
 }
 
 
