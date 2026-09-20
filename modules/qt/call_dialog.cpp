@@ -19,6 +19,7 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
+#include <QWindow>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
@@ -137,17 +138,21 @@ void CallDialog::positionNearTray()
 void CallDialog::setupLayerShell()
 {
 #ifdef HAVE_LAYERSHELL
-	/* Force creation of the native window handle so we can apply
-	 * the LayerShellQt integration BEFORE the window is shown.
-	 * LayerShellQt installs an event filter on the QWindow that
-	 * intercepts the surface creation and uses the layer-shell
-	 * protocol instead of xdg-shell. This must happen before show(). */
+	/* Create the native window to get a QWindow handle, then
+	 * destroy the platform surface (xdg-shell) so LayerShellQt
+	 * can install its event filter. When show() is called later,
+	 * the event filter intercepts surface creation and uses the
+	 * layer-shell protocol instead. */
 	setAttribute(Qt::WA_NativeWindow);
 	winId();
 
 	QWindow *win = windowHandle();
 	if (!win)
 		return;
+
+	/* Destroy the xdg-shell surface but keep the QWindow object
+	 * so we can install the LayerShellQt event filter on it. */
+	win->destroy();
 
 	auto *ls = LayerShellQt::Window::get(win);
 	if (!ls)
@@ -163,6 +168,7 @@ void CallDialog::setupLayerShell()
 		LayerShellQt::Window::KeyboardInteractivityOnDemand);
 	ls->setScope("baresip-call-panel");
 	ls->setCloseOnDismissed(true);
+	layerShellApplied_ = true;
 #endif
 }
 
@@ -172,34 +178,36 @@ void CallDialog::showPanel()
 	adjustSize();
 
 #ifdef HAVE_LAYERSHELL
-	QWindow *win = windowHandle();
-	if (win) {
-		auto *ls = LayerShellQt::Window::get(win);
-		if (ls) {
-			/* Update margins based on tray icon position. */
-			QRect iconGeo;
-			if (trayIcon_)
-				iconGeo = trayIcon_->geometry();
+	if (layerShellApplied_) {
+		QWindow *win = windowHandle();
+		if (win) {
+			auto *ls = LayerShellQt::Window::get(win);
+			if (ls) {
+				/* Update margins based on tray icon position. */
+				QRect iconGeo;
+				if (trayIcon_)
+					iconGeo = trayIcon_->geometry();
 
-			int marginR, marginB;
-			if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
-				QScreen *screen = QGuiApplication::screenAt(
-							iconGeo.bottomRight());
-				if (!screen)
-					screen = QGuiApplication::primaryScreen();
-				QRect avail = screen ? screen->availableGeometry()
-						     : QRect(0,0,1920,1080);
-				marginR = avail.right() - iconGeo.right();
-				marginB = avail.bottom() - iconGeo.top() + 1;
-			} else {
-				marginR = 4;
-				marginB = 40;
+				int marginR, marginB;
+				if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
+					QScreen *screen = QGuiApplication::screenAt(
+								iconGeo.bottomRight());
+					if (!screen)
+						screen = QGuiApplication::primaryScreen();
+					QRect avail = screen ? screen->availableGeometry()
+							     : QRect(0,0,1920,1080);
+					marginR = avail.right() - iconGeo.right();
+					marginB = avail.bottom() - iconGeo.top() + 1;
+				} else {
+					marginR = 4;
+					marginB = 40;
+				}
+
+				ls->setMargins(QMargins(0, 0, marginR, marginB));
+				ls->setDesiredSize(size());
+				show();
+				return;
 			}
-
-			ls->setMargins(QMargins(0, 0, marginR, marginB));
-			ls->setDesiredSize(size());
-			show();
-			return;
 		}
 	}
 #endif

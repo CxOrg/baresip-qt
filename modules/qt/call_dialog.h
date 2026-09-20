@@ -100,6 +100,7 @@ private:
 	QString peerName_;
 	bool isOutgoing_ = false;  /**< direction for InCall label */
 	QSystemTrayIcon *trayIcon_ = nullptr;
+	bool layerShellApplied_ = false;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
