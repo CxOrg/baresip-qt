@@ -226,25 +226,11 @@ void CallDialog::showPanel()
 				int marginR, marginT = 0, marginB = 0;
 				LayerShellQt::Window::Anchors anchors;
 
-				if (avail.top() > full.top()) {
-					/* Panel bar at top — drop down. */
-					anchors = LayerShellQt::Window::Anchors(
-						LayerShellQt::Window::AnchorTop |
-						LayerShellQt::Window::AnchorRight);
-					marginT = 0;
-				} else if (avail.bottom() < full.bottom()) {
-					/* Panel bar at bottom — open upward. */
-					anchors = LayerShellQt::Window::Anchors(
-						LayerShellQt::Window::AnchorBottom |
-						LayerShellQt::Window::AnchorRight);
-					marginB = 0;
-				} else {
-					/* No panel detected — bottom-right. */
-					anchors = LayerShellQt::Window::Anchors(
-						LayerShellQt::Window::AnchorBottom |
-						LayerShellQt::Window::AnchorRight);
-					marginB = 40;
-				}
+				/* Fixed top-right position with 60px top margin. */
+				anchors = LayerShellQt::Window::Anchors(
+					LayerShellQt::Window::AnchorTop |
+					LayerShellQt::Window::AnchorRight);
+				marginT = 60;
 
 				marginR = 4;
 
