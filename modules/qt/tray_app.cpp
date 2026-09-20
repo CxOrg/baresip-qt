@@ -203,8 +203,15 @@ void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 	 * in this protocol (it's reserved for a separate "Activate"
 	 * action) -- give it a useful default instead of nothing.
 	 */
-	if (reason == QSystemTrayIcon::Trigger)
-		onDial();
+	if (reason == QSystemTrayIcon::Trigger) {
+		/* Toggle: if the idle dialog is visible, hide it;
+		 * otherwise show it. */
+		if (idleCallDialog_ && idleCallDialog_->isVisible()) {
+			idleCallDialog_->hide();
+		} else {
+			onDial();
+		}
+	}
 }
 
 
