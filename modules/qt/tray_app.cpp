@@ -191,20 +191,11 @@ QAction *TrayApp::findAccountAction(quintptr uaPtr) const
 void TrayApp::onTrayActivated(int x, int y)
 {
 	/* Plasma passes the icon's screen coordinates via the
-	 * StatusNotifierItem Activate(x, y) D-Bus call. */
+	 * StatusNotifierItem Activate(x, y) D-Bus call. Store them
+	 * so the CallDialog can anchor near the icon. */
 	lastTrayPos_ = QPoint(x, y);
 	setTrayIcon("call-start", QString());
-
-	/* Show a popup menu at the icon position. Plasma renders QMenu
-	 * popups natively via DBusMenu/Wayland, so this avoids the
-	 * grabbing-popup error that Qt::Popup windows hit. */
-	if (!callMenu_) {
-		callMenu_ = new QMenu();
-		/* Blank for now — will embed the call panel widget next. */
-		callMenu_->addAction("(placeholder)");
-	}
-
-	callMenu_->popup(QPoint(x, y));
+	onDial();
 }
 
 
