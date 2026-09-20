@@ -40,8 +40,7 @@ static QPushButton *makeButton(const QString &text,
 
 	/* Tint via stylesheet so the colour is visible on any theme. */
 	if (green)
-		btn->setAttribute(Qt::WA_TranslucentBackground);
-	setStyleSheet(
+		btn->setStyleSheet(
 			"QPushButton { background-color: #2e7d32;"
 			"              color: white;"
 			"              font-weight: bold;"
