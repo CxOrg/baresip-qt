@@ -14,7 +14,7 @@ provides=('baresip')
 conflicts=('baresip')
 
 # Build from the local source tree (this repository).
-source=("git+file://${PWD}#commit=fc6971e8")
+source=("git+file://${PWD}#commit=126cdb97")
 sha256sums=('SKIP')
 
 build() {
