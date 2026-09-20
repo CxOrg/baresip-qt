@@ -151,8 +151,9 @@ void CallDialog::showPanel()
 		if (ls) {
 			/* Anchor to bottom-right corner (where the tray
 			 * typically lives), opening upward. */
-			ls->setAnchors(LayerShellQt::Window::AnchorBottom |
-				       LayerShellQt::Window::AnchorRight);
+			ls->setAnchors(LayerShellQt::Window::Anchors(
+				       LayerShellQt::Window::AnchorBottom |
+				       LayerShellQt::Window::AnchorRight));
 			ls->setLayer(LayerShellQt::Window::LayerOverlay);
 			ls->setKeyboardInteractivity(
 				LayerShellQt::Window::KeyboardInteractivityOnDemand);
