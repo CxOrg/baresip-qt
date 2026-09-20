@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com"
 license=('BSD-3-Clause')
 
-depends=('qt6-base' 'libre' 'openssl' 'opus')
+depends=('qt6-base' 'libre' 'openssl' 'opus' 'frameworkintegration')
 makedepends=('cmake' 'git')
 
 provides=('baresip')

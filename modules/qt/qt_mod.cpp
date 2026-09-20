@@ -14,6 +14,9 @@
 #include <QApplication>
 #include <QMetaObject>
 #include <QString>
+#ifdef HAVE_KSTYLE
+#include <kstylemanager.h>
+#endif
 
 
 /** Extract the user part (phone number) from a SIP URI for history.
@@ -335,6 +338,12 @@ static int qt_thread(void *arg)
 	QApplication app(qargc, qargv);
 	app.setApplicationName("baresip");
 	app.setQuitOnLastWindowClosed(false);
+
+#ifdef HAVE_KSTYLE
+	/* Apply the user's configured KDE widget style (Breeze by default)
+	 * so the call panel adopts Plasma panel styling. */
+	KStyleManager::initStyle();
+#endif
 
 	TrayApp tray(mod);
 	mod->tray = &tray;
