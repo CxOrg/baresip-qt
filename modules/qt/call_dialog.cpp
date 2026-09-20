@@ -83,7 +83,9 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	setStyleSheet(
 		"QDialog { background-color: #13161b;"
 		"          border: 2px solid #2a2e33;"
-		"          border-radius: 8px; }");
+		"          border-radius: 12px; }"
+		"QFrame#callPanel { background-color: palette(window);"
+		"         border-radius: 12px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -107,7 +109,9 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setStyleSheet(
 		"QDialog { background-color: #13161b;"
 		"          border: 2px solid #2a2e33;"
-		"          border-radius: 8px; }");
+		"          border-radius: 12px; }"
+		"QFrame#callPanel { background-color: palette(window);"
+		"         border-radius: 12px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
@@ -323,6 +327,7 @@ void CallDialog::buildUi()
 	/* Inner panel behind the displayed elements — no custom
 	 * styling, it inherits the widget style (Qt6Curve). */
 	auto *panel = new QFrame(this);
+	panel->setObjectName("callPanel");
 	panel->setAutoFillBackground(true);
 	outer->addWidget(panel);
 
