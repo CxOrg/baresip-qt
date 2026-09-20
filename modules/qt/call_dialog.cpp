@@ -80,7 +80,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * through; the stylesheet rounds the top-level widget. */
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: palette(window);"
+		"QDialog { background-color: #13161b;"
 		"           border-radius: 12px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -103,7 +103,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: palette(window);"
+		"QDialog { background-color: #13161b;"
 		"           border-radius: 12px; }");
 	installEventFilter(this);
 	buildUi();
