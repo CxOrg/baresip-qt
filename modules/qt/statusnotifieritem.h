@@ -401,6 +401,9 @@ class StatusNotifierItemAdaptor : public QDBusAbstractAdaptor {
 "      <arg direction=\"in\" type=\"i\" name=\"delta\"/>\n"
 "      <arg direction=\"in\" type=\"s\" name=\"orientation\"/>\n"
 "    </method>\n"
+"    <method name=\"ProvideXdgActivationToken\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"token\"/>\n"
+"    </method>\n"
 "    <signal name=\"NewIcon\"/>\n"
 "    <signal name=\"NewAttentionIcon\"/>\n"
 "    <signal name=\"NewTitle\"/>\n"
@@ -435,6 +438,10 @@ public slots:
 	void SecondaryActivate(int x, int y) { m_item->SecondaryActivate(x, y); }
 	void Scroll(int delta, const QString &orientation) {
 		m_item->Scroll(delta, orientation);
+	}
+	/* Plasma sends this before Activate; we just accept it. */
+	void ProvideXdgActivationToken(const QString &token) {
+		Q_UNUSED(token)
 	}
 
 signals:
