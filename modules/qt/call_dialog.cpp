@@ -20,6 +20,8 @@
 #include <QApplication>
 #include <QCursor>
 #include <QWindow>
+#include <QPainter>
+#include <QPainterPath>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
@@ -79,9 +81,6 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WA_TranslucentBackground lets the rounded corners show
 	 * through; the stylesheet rounds the top-level widget. */
 	setAttribute(Qt::WA_TranslucentBackground);
-	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"           border-radius: 12px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -102,9 +101,6 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
-	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"           border-radius: 12px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
@@ -307,6 +303,28 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		}
 	}
 	return QDialog::eventFilter(obj, event);
+}
+
+
+void CallDialog::paintEvent(QPaintEvent *event)
+{
+	/* With WA_TranslucentBackground, the window is transparent.
+	 * Paint a rounded-rectangle background in the panel colour so
+	 * the popup has a solid #13161b background with 12px rounded
+	 * corners. This is done in paintEvent (not stylesheet) because
+	 * the active Qt widget style (Qt6Curve) may override stylesheet
+	 * background-color. */
+	QPainter p(this);
+	p.setRenderHint(QPainter::Antialiasing);
+	p.setPen(Qt::NoPen);
+	p.setBrush(QColor("#13161b"));
+
+	QPainterPath path;
+	path.addRoundedRect(rect(), 12, 12);
+	p.fillPath(path, QColor("#13161b"));
+
+	/* Let QDialog paint its children on top of our background. */
+	QDialog::paintEvent(event);
 }
 
 
