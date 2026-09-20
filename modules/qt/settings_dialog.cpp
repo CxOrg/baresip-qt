@@ -278,6 +278,13 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 {
 	setWindowTitle("baresip Settings");
 	setAttribute(Qt::WA_DeleteOnClose, false);
+	/* Rounded corners like the call panel: translucent surface
+	 * with a themed fill/border drawn inside the 8px radius. */
+	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
+		"QDialog { background-color: palette(window);"
+		"          border: 2px solid palette(dark);"
+		"          border-radius: 8px; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
