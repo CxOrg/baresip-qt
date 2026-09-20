@@ -1,21 +1,22 @@
 /**
  * @file qt/call_dialog.h Qt UI module -- unified call control panel
  *
- * A call control panel embedded in a QMenu (via QWidgetAction) that
- * appears near the tray icon on left-click, adapting to three states:
+ * A frameless popup panel that appears near the tray icon on
+ * left-click, adapting to three call states:
  *
  *  - Dialing:   number entry editable; green=Call, red=Cancel
  *  - Incoming:  number read-only;      green=Answer, red=Hangup
  *  - InCall:    number read-only;     green=Call/Answer (disabled),
  *               red=Hangup, optional Dialpad
  *
- * Using a QMenu container gives us automatic tray-anchored positioning,
- * native Plasma styling, and Wayland popup support -- no LayerShellQt
- * or manual window positioning needed.
+ * The panel uses Qt::Popup | Qt::FramelessWindowHint so it appears
+ * as a lightweight popup extending from the tray icon (similar to
+ * a menu) and closes when the user clicks outside it. It inherits
+ * the Plasma/system Qt style automatically.
  */
 #pragma once
 
-#include <QWidget>
+#include <QDialog>
 #include <QString>
 #include <QPoint>
 
@@ -23,9 +24,8 @@ class QLineEdit;
 class QPushButton;
 class QListWidget;
 class QListWidgetItem;
-class QMenu;
 
-class CallDialog : public QWidget {
+class CallDialog : public QDialog {
 	Q_OBJECT
 
 public:
@@ -65,21 +65,16 @@ public:
 	void setStateIncoming(quintptr callPtr, const QString &peerUri,
 			      const QString &peerName);
 
-	/** Show the panel as a QMenu popup positioned near the tray
-	 *  icon. The QMenu provides native Wayland popup behavior and
-	 *  Plasma styling. */
+	/** Show the panel positioned near the tray icon. */
 	void showPanel();
 
-	/** Close the popup menu if one is open. */
-	void closePanel();
-
-	/** Raise/activate -- for compatibility with TrayApp. */
-	void raise() {}
-	void activateWindow() {}
+	/** Close the panel if the user clicked outside it (popup-like
+	 *  behavior without Qt::Popup, which doesn't work on Wayland
+	 *  without a transient parent). */
+	bool eventFilter(QObject *obj, QEvent *event) override;
 
 	quintptr callPtr() const { return callPtr_; }
 	State state() const { return state_; }
-	bool isVisible() const;
 
 signals:
 	/** Green button clicked. In Dialing: emit the URI to dial.
@@ -98,15 +93,15 @@ signals:
 private:
 	void buildUi();
 	void applyState();
-	void onMenuAboutToHide();
+	void positionNearTray();
+	void setupLayerShell();
 
 	State state_;
 	quintptr callPtr_ = 0;
 	QString peerName_;
 	bool isOutgoing_ = false;  /**< direction for InCall label */
 	QPoint anchor_;            /**< tray icon screen position for positioning */
-
-	QMenu *menu_ = nullptr;    /**< popup menu containing this widget */
+	bool layerShellApplied_ = false;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
