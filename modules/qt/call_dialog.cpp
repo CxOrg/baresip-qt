@@ -272,13 +272,13 @@ void CallDialog::showPanel()
 				int marginR, marginT = 0, marginB = 0;
 				LayerShellQt::Window::Anchors anchors;
 
-				/* Fixed top-right position with 60px top margin. */
+				/* Fixed top-right position with 58px top margin. */
 				anchors = LayerShellQt::Window::Anchors(
 					LayerShellQt::Window::AnchorTop |
 					LayerShellQt::Window::AnchorRight);
-				marginT = 60;
+				marginT = 58;
 
-				marginR = 12;
+				marginR = 8;
 
 				ls->setAnchors(anchors);
 				ls->setMargins(QMargins(0, marginT, marginR, marginB));
