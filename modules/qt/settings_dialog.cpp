@@ -304,8 +304,20 @@ void SettingsDialog::setupLayerShell()
 	ls->setAnchors(LayerShellQt::Window::Anchors(
 		LayerShellQt::Window::AnchorTop |
 		LayerShellQt::Window::AnchorRight));
-	ls->setMargins(QMargins(0, 58, 8, 0));
+	ls->setMargins(qtPanelMargins(anchorPos_, size()));
 	ls->setDesiredSize(size());
+#endif
+}
+
+
+void SettingsDialog::setAnchorPoint(const QPoint &pos)
+{
+	anchorPos_ = pos;
+#ifdef HAVE_LAYERSHELL
+	QWindow *win = windowHandle();
+	auto *ls = win ? LayerShellQt::Window::get(win) : nullptr;
+	if (ls)
+		ls->setMargins(qtPanelMargins(anchorPos_, size()));
 #endif
 }
 

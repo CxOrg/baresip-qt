@@ -21,6 +21,7 @@
 #include <QDialog>
 #include <QString>
 #include <QList>
+#include <QPoint>
 
 class QLineEdit;
 class QComboBox;
@@ -35,6 +36,10 @@ class SettingsDialog : public QDialog {
 
 public:
 	explicit SettingsDialog(QWidget *parent = nullptr);
+
+	/** Tray-icon click position used to anchor the panel; call
+	 *  before show(). */
+	void setAnchorPoint(const QPoint &pos);
 
 private:
 	/** Number of account tabs shown in the dialog. */
@@ -72,6 +77,8 @@ private:
 	/* Audio tab */
 	QComboBox *audioSrc_     = nullptr;
 	QComboBox *audioPlayer_  = nullptr;
+
+	QPoint anchorPos_;
 
 private slots:
 	void onApply();

@@ -71,6 +71,11 @@ public:
 	/** Show the panel positioned near the tray icon. */
 	void showPanel();
 
+	/** Screen position of the tray icon (e.g. cursor position at
+	 *  activation time) used to anchor the panel; null = default
+	 *  top-right placement. */
+	void setAnchorPoint(const QPoint &pos) { anchorPos_ = pos; }
+
 	/** Close the panel if the user clicked outside it (popup-like
 	 *  behavior without Qt::Popup, which doesn't work on Wayland
 	 *  without a transient parent). */
@@ -110,6 +115,7 @@ private:
 	bool layerShellApplied_ = false;
 	/** false = list shows call history, true = contacts. */
 	bool showingContacts_ = false;
+	QPoint anchorPos_;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;

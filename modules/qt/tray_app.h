@@ -10,6 +10,7 @@
 #include <QActionGroup>
 #include <QHash>
 #include <QPointer>
+#include <QPoint>
 #include <QDateTime>
 
 class CallDialog;
@@ -105,4 +106,9 @@ private:
 	QHash<quintptr, QPointer<DialpadDialog>> dialpads_;
 
 	int historyLength_ = 0;
+
+	/* Cursor position at the last tray-icon activation -- a proxy
+	 * for the icon's screen position (the cursor is over the icon
+	 * when clicked) used to anchor popup panels under Wayland. */
+	QPoint trayClickPos_;
 };

@@ -221,6 +221,14 @@ QAction *TrayApp::findAccountAction(quintptr uaPtr) const
 
 void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 {
+	/* Remember where the tray icon lives: under Wayland the icon
+	 * geometry isn't exposed, but the cursor is over the icon when
+	 * it is activated, so its position is a good anchor proxy. */
+	if (reason == QSystemTrayIcon::Trigger ||
+	    reason == QSystemTrayIcon::Context ||
+	    reason == QSystemTrayIcon::MiddleClick)
+		trayClickPos_ = QCursor::pos();
+
 	/* Reset the icon back to normal once the user has seen it
 	 * (e.g. after a missed-call icon was shown).
 	 */
@@ -268,6 +276,7 @@ void TrayApp::onDial()
 		qt_mod_connect(u.constData());
 	});
 
+	idleCallDialog_->setAnchorPoint(trayClickPos_);
 	idleCallDialog_->showPanel();
 }
 
@@ -298,6 +307,7 @@ void TrayApp::onSettings()
 	if (!settingsDialog_)
 		settingsDialog_ = new SettingsDialog();
 
+	settingsDialog_->setAnchorPoint(trayClickPos_);
 	settingsDialog_->show();
 	settingsDialog_->raise();
 	settingsDialog_->activateWindow();
@@ -318,6 +328,7 @@ void TrayApp::onContacts()
 		});
 	}
 
+	contactsDialog_->setAnchorPoint(trayClickPos_);
 	contactsDialog_->show();
 	contactsDialog_->raise();
 	contactsDialog_->activateWindow();
@@ -537,6 +548,7 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 				     peerUri, peerName, trayIcon_);
 	}
 	callDialogs_.insert(callPtr, dlg);
+	dlg->setAnchorPoint(trayClickPos_);
 
 	connect(dlg, &CallDialog::answerRequested,
 		this, [this, callPtr]() { onAnswer(callPtr); });
@@ -585,6 +597,7 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 	auto *dlg = new CallDialog(CallDialog::State::InCall, callPtr,
 				   peerUri, QString(), trayIcon_);
 	callDialogs_.insert(callPtr, dlg);
+	dlg->setAnchorPoint(trayClickPos_);
 
 	connect(dlg, &CallDialog::hangupRequested,
 		this, [this, callPtr]() { onHangup(callPtr); });

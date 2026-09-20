@@ -20,6 +20,7 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include <QPoint>
 
 class QListWidget;
 class QListWidgetItem;
@@ -46,6 +47,11 @@ signals:
 	 *  in-memory contact list was queued for re-sync. */
 	void contactsSaved();
 
+public:
+	/** Tray-icon click position used to anchor the panel; call
+	 *  before show(). */
+	void setAnchorPoint(const QPoint &pos);
+
 private:
 
 	void buildUi();
@@ -69,6 +75,7 @@ private:
 	QList<ContactEntry> entries_;
 	QStringList         preservedLines_; /* comments/blank lines */
 	int editingIndex_ = -1;
+	QPoint anchorPos_;
 
 private slots:
 	void onTabChanged(int index);

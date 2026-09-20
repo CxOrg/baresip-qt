@@ -259,29 +259,14 @@ void CallDialog::showPanel()
 		if (win) {
 			auto *ls = LayerShellQt::Window::get(win);
 			if (ls) {
-				/* Determine anchors and margins from the
-				 * screen geometry. Detect which edge the
-				 * panel bar is on by comparing full vs
-				 * available geometry. */
-				QScreen *screen = QGuiApplication::primaryScreen();
-				QRect full = screen ? screen->geometry()
-						    : QRect(0,0,1920,1080);
-				QRect avail = screen ? screen->availableGeometry()
-						     : QRect(0,0,1920,1080);
-
-				int marginR, marginT = 0, marginB = 0;
-				LayerShellQt::Window::Anchors anchors;
-
-				/* Fixed top-right position with 58px top margin. */
-				anchors = LayerShellQt::Window::Anchors(
+				/* Anchored top-right; margins from the
+				 * tray-icon click position so the panel
+				 * edges up against the icon like a menu. */
+				ls->setAnchors(LayerShellQt::Window::Anchors(
 					LayerShellQt::Window::AnchorTop |
-					LayerShellQt::Window::AnchorRight);
-				marginT = 58;
-
-				marginR = 8;
-
-				ls->setAnchors(anchors);
-				ls->setMargins(QMargins(0, marginT, marginR, marginB));
+					LayerShellQt::Window::AnchorRight));
+				ls->setMargins(qtPanelMargins(anchorPos_,
+							    size()));
 				ls->setDesiredSize(size());
 				show();
 				return;

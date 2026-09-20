@@ -17,6 +17,8 @@
 #include <QFile>
 #include <QDir>
 #include <QList>
+#include <QScreen>
+#include <QGuiApplication>
 #ifdef HAVE_KSTYLE
 #include <kstylemanager.h>
 #endif
@@ -66,6 +68,37 @@ QString accountLabel(struct ua *ua)
 		: QString();
 
 	return name.isEmpty() ? base : QString("%1  %2").arg(name, base);
+}
+
+
+QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize)
+{
+	/* Screen containing the anchor point (tray icon position),
+	 * else the primary screen. */
+	QScreen *screen = anchorPos.isNull()
+		? nullptr
+		: QGuiApplication::screenAt(anchorPos);
+	if (!screen)
+		screen = QGuiApplication::primaryScreen();
+
+	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
+	QRect avail = screen ? screen->availableGeometry() : full;
+
+	/* Top margin = real top-panel height (the geometry strut is
+	 * the gap between full and available geometry) + 8px gap. */
+	int top = qMax(0, avail.top() - full.top()) + 8;
+
+	/* Right margin: place the panel's right edge at the click x,
+	 * like a menu growing leftward from the tray icon. Clamped so
+	 * the panel can't leave the screen on either side. */
+	int right = 8;
+	if (!anchorPos.isNull() && full.contains(anchorPos)) {
+		right = qMax(0, full.right() - anchorPos.x() + 1);
+		int maxRight = full.width() - panelSize.width();
+		right = qMin(right, qMax(0, maxRight));
+	}
+
+	return QMargins(0, top, right, 0);
 }
 
 

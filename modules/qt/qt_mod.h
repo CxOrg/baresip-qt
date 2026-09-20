@@ -10,6 +10,9 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QMargins>
+#include <QPoint>
+#include <QSize>
 #include <mutex>
 
 extern "C" {
@@ -90,3 +93,9 @@ QString uriToNumber(const char *uri);
 
 /** Account menu label: "<display name>  sip:<user>". */
 QString accountLabel(struct ua *ua);
+
+/** Layer-shell margins for the popup panels. If `anchorPos` is a
+ *  valid screen point (e.g. the tray-icon click position) the
+ *  panel's right edge lands on it, like a menu extending from the
+ *  icon; the top margin is the real top-panel height + 8px. */
+QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize);
