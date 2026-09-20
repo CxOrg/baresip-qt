@@ -47,6 +47,8 @@ enum qt_mod_events {
 	MQ_DTMF,
 	MQ_REGISTER,
 	MQ_UNREGISTER,
+	MQ_UA_ALLOC,
+	MQ_UA_FREE,
 };
 
 struct qt_mod {
@@ -67,6 +69,8 @@ void qt_mod_hangup(struct call *call);
 void qt_mod_select_ua(struct ua *ua);
 void qt_mod_register(struct ua *ua);
 void qt_mod_unregister(struct ua *ua);
+void qt_mod_ua_alloc(const QString &line);
+void qt_mod_ua_free(struct ua *ua);
 void qt_mod_send_digit(struct call *call, char key);
 void qt_mod_quit(void);
 

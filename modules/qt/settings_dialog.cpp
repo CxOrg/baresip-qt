@@ -65,24 +65,103 @@ static bool writeAccounts(const QStringList &lines)
 	return true;
 }
 
-/** Read the ";enabled=" flag of account `index` from the accounts
- *  file. Absent param counts as enabled (default). */
-static bool accountEnabledFromFile(int index)
+/** Return the Nth non-comment, non-empty account line, or empty. */
+static QString accountLine(int index)
 {
 	QFile f(homeBaresip() + "/accounts");
 	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-		return true;
+		return QString();
 
-	bool enabled = true;
+	QString found;
 	QStringList lines;
 	while (!f.atEnd())
 		lines << QString::fromUtf8(f.readLine());
 	f.close();
 
-	forEachAccountLine(lines, index, [&enabled](QString &line) {
-		enabled = !line.contains(";enabled=no");
+	forEachAccountLine(lines, index, [&found](QString &line) {
+		found = line;
 	});
-	return enabled;
+	return found;
+}
+
+/** Extract ";key=value" from an account line. Addr-params live after
+ *  the closing '>' of <sip:...> so the search starts there; a value
+ *  ends at the nearest ';' or end-of-line. Quotes are stripped. */
+static QString lineParam(const QString &line, const QString &key)
+{
+	int gt = line.lastIndexOf('>');
+	QString param = QString(";%1=").arg(key);
+	int pi = line.indexOf(param, gt >= 0 ? gt : 0);
+	if (pi < 0)
+		return QString();
+
+	int vi = pi + param.length();
+	int end = line.indexOf('\n', vi);
+	if (end < 0) end = line.length();
+	int semi = line.indexOf(';', vi);
+	if (semi >= 0 && semi < end)
+		end = semi;
+
+	QString v = line.mid(vi, end - vi).trimmed();
+	if (v.startsWith('"') && v.endsWith('"') && v.length() > 1)
+		v = v.mid(1, v.length() - 2);
+	return v;
+}
+
+/** "user@host[:port]" extracted from the line's <sip:...> AOR,
+ *  for matching against account_aor() of a live UA. */
+static QString lineAorUserHost(const QString &line)
+{
+	int lt = line.indexOf('<');
+	int gt = line.indexOf('>', lt);
+	if (lt < 0 || gt < 0)
+		return QString();
+	QString aor = line.mid(lt + 1, gt - lt - 1);
+	int semi = aor.indexOf(';');
+	if (semi >= 0)
+		aor = aor.left(semi);
+	if (aor.startsWith("sip:", Qt::CaseInsensitive))
+		aor = aor.mid(4);
+	else if (aor.startsWith("sips:", Qt::CaseInsensitive))
+		aor = aor.mid(5);
+	return aor.trimmed();
+}
+
+static QString displayNameFromLine(const QString &line)
+{
+	QString d = lineParam(line, "displayname");
+	if (!d.isEmpty())
+		return d;
+	/* Fall back to a quoted "Name" prefix before the <sip:...>. */
+	int lt = line.indexOf('<');
+	if (lt > 0) {
+		QString pre = line.left(lt).trimmed();
+		if (pre.startsWith('"') && pre.endsWith('"')
+		    && pre.length() > 1)
+			pre = pre.mid(1, pre.length() - 2);
+		return pre;
+	}
+	return QString();
+}
+
+static int answermodeFromString(const QString &s)
+{
+	if (s == "early")       return ANSWERMODE_EARLY;
+	if (s == "auto")        return ANSWERMODE_AUTO;
+	if (s == "early-audio") return ANSWERMODE_EARLY_AUDIO;
+	if (s == "early-video") return ANSWERMODE_EARLY_VIDEO;
+	return ANSWERMODE_MANUAL;
+}
+
+static QString answermodeToString(int mode)
+{
+	switch (mode) {
+	case ANSWERMODE_EARLY:       return "early";
+	case ANSWERMODE_AUTO:        return "auto";
+	case ANSWERMODE_EARLY_AUDIO: return "early-audio";
+	case ANSWERMODE_EARLY_VIDEO: return "early-video";
+	default:                     return "manual";
+	}
 }
 
 /** Rewrite specific parameters in account `index`'s line in
@@ -323,58 +402,69 @@ void SettingsDialog::buildUi()
 
 void SettingsDialog::loadAccount(AccountWidgets &w, int index)
 {
-	/* The Nth UA in uag_list corresponds to the Nth non-comment
-	 * line of ~/.baresip/accounts. */
-	struct ua *ua = nullptr;
-	struct le *le;
-	int i = 0;
-	for (le = list_head(uag_list()); le; le = le->next, ++i) {
-		if (i == index) {
-			ua = static_cast<struct ua *>(le->data);
-			break;
-		}
+	/* Parse the accounts-file line directly — the tab must show
+	 * configured accounts even when they have no UA (disabled
+	 * accounts are destroyed at startup, not merely
+	 * unregistered). */
+	QString line = accountLine(index);
+	if (line.isEmpty())
+		return;
+
+	w.enabled->setChecked(!line.contains(";enabled=no"));
+	w.displayName->setText(displayNameFromLine(line));
+	w.authUser->setText(lineParam(line, "auth_user"));
+	w.authPass->setText(lineParam(line, "auth_pass"));
+
+	/* SIP domain: between '@' and the next ';' or '>' inside <>. */
+	int at = line.indexOf('@');
+	int gt = line.indexOf('>', at);
+	if (at >= 0 && gt > at) {
+		int end = gt;
+		int semi = line.indexOf(';', at);
+		if (semi >= 0 && semi < end)
+			end = semi;
+		w.sipDomain->setText(line.mid(at + 1, end - at - 1));
 	}
-	if (!ua)
-		return;
-	struct account *acc = ua_account(ua);
-	if (!acc)
-		return;
 
-	w.enabled->setChecked(accountEnabledFromFile(index));
-	w.displayName->setText(QString::fromUtf8(account_display_name(acc)));
-	w.authUser->setText(QString::fromUtf8(account_auth_user(acc)));
-	w.authPass->setText(QString::fromUtf8(account_auth_pass(acc)));
+	QString ri = lineParam(line, "regint");
+	w.regint->setValue(ri.isEmpty() ? 3600 : ri.toInt());
 
-	/* Show only the domain part of the AOR: strip the
-	 * "sip:user@" prefix and any ";params" suffix. */
-	QString aor = QString::fromUtf8(account_aor(acc));
-	int aorAt = aor.indexOf('@');
-	QString domain = (aorAt >= 0) ? aor.mid(aorAt + 1) : aor;
-	int aorSemi = domain.indexOf(';');
-	if (aorSemi >= 0)
-		domain = domain.left(aorSemi);
-	w.sipDomain->setText(domain);
+	/* stunserver=stun:[user@]host[:port] */
+	QString ss = lineParam(line, "stunserver");
+	if (ss.startsWith("stun:"))
+		ss = ss.mid(5);
+	int ssAt = ss.lastIndexOf('@');
+	QString hostPort = (ssAt >= 0) ? ss.mid(ssAt + 1) : ss;
+	QString user = (ssAt > 0) ? ss.left(ssAt) : QString();
+	QString port;
+	int colon = hostPort.lastIndexOf(':');
+	if (colon >= 0) {
+		port = hostPort.mid(colon + 1);
+		hostPort = hostPort.left(colon);
+	}
+	w.stunHost->setText(hostPort);
+	if (!port.isEmpty())
+		w.stunPort->setValue(port.toInt());
+	QString su = lineParam(line, "stunuser");
+	w.stunUser->setText(su.isEmpty() ? user : su);
+	w.stunPass->setText(lineParam(line, "stunpass"));
 
-	w.regint->setValue(account_regint(acc));
+	w.answermode->setCurrentIndex(
+		answermodeFromString(lineParam(line, "answermode")));
 
-	w.stunHost->setText(QString::fromUtf8(account_stun_host(acc)));
-	w.stunPort->setValue(account_stun_port(acc));
-	w.stunUser->setText(QString::fromUtf8(account_stun_user(acc)));
-	w.stunPass->setText(QString::fromUtf8(account_stun_pass(acc)));
-
-	w.answermode->setCurrentIndex(account_answermode(acc));
-
-	const char *me = account_mediaenc(acc);
-	if (me) {
-		int j = w.mediaenc->findText(QString::fromUtf8(me), Qt::MatchFixedString);
+	QString me = lineParam(line, "mediaenc");
+	if (!me.isEmpty()) {
+		int j = w.mediaenc->findText(me, Qt::MatchFixedString);
 		if (j >= 0) w.mediaenc->setCurrentIndex(j);
 	}
 
-	const char *mn = account_medianat(acc);
-	if (mn) {
-		int j = w.medianat->findText(QString::fromUtf8(mn), Qt::MatchFixedString);
+	QString mn = lineParam(line, "medianat");
+	if (!mn.isEmpty()) {
+		int j = w.medianat->findText(mn, Qt::MatchFixedString);
 		if (j >= 0) w.medianat->setCurrentIndex(j);
 	}
+
+	w.audioCodecs->setText(lineParam(line, "audio_codecs"));
 }
 
 
@@ -387,23 +477,34 @@ void SettingsDialog::loadSettings()
 
 void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 {
-	/* Find the Nth UA (same order as accounts-file lines). */
+	/* Find the UA matching this account line by AOR — index-based
+	 * mapping breaks once disabled accounts are destroyed and the
+	 * remaining UAs shift position. */
+	QString origLine = accountLine(index);
+	if (origLine.isEmpty())
+		return;
+
+	QString wantAor = lineAorUserHost(origLine);
 	struct ua *ua = nullptr;
 	struct le *le;
-	int i = 0;
-	for (le = list_head(uag_list()); le; le = le->next, ++i) {
-		if (i == index) {
-			ua = static_cast<struct ua *>(le->data);
+	for (le = list_head(uag_list()); le; le = le->next) {
+		struct ua *u = static_cast<struct ua *>(le->data);
+		QString have = QString::fromUtf8(
+			account_aor(ua_account(u)));
+		if (have.startsWith("sip:", Qt::CaseInsensitive))
+			have = have.mid(4);
+		else if (have.startsWith("sips:", Qt::CaseInsensitive))
+			have = have.mid(5);
+		if (have == wantAor) {
+			ua = u;
 			break;
 		}
 	}
-	if (!ua)
-		return;
-	struct account *acc = ua_account(ua);
-	if (!acc)
-		return;
 
-	/* Apply live via account_set_*() APIs. */
+	/* Apply live via account_set_*() APIs — only when the account
+	 * actually has a UA (disabled accounts have none). */
+	struct account *acc = ua ? ua_account(ua) : nullptr;
+	if (acc) {
 	QByteArray dn = w.displayName->text().toUtf8();
 	account_set_display_name(acc, dn.constData());
 
@@ -438,17 +539,11 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 	QByteArray ac = w.audioCodecs->text().toUtf8();
 	if (!ac.isEmpty())
 		account_set_audio_codecs(acc, ac.constData());
-
-	/* Toggling Enabled applies immediately: register now, or
-	 * unregister without removing the account. ua_* calls must
-	 * run on the re thread — go through the mqueue. */
-	if (w.enabled->isChecked())
-		qt_mod_register(ua);
-	else
-		qt_mod_unregister(ua);
+	}
 
 	/* Persist to ~/.baresip/accounts (update known params in-place,
-	 * preserving unknown params like outbound, 100rel, etc.). */
+	 * preserving unknown params like outbound, 100rel, etc.). Runs
+	 * even when the account has no live UA. */
 	QMap<QString, QString> updates;
 	updates["enabled"] = w.enabled->isChecked() ? "yes" : "no";
 	if (!w.displayName->text().isEmpty())
@@ -471,7 +566,8 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 		if (!w.stunPass->text().isEmpty())
 			updates["stunpass"] = w.stunPass->text();
 	}
-	updates["answermode"] = w.answermode->currentText().toLower();
+	updates["answermode"] = answermodeToString(
+		w.answermode->currentData().toInt());
 	if (w.mediaenc->currentText() != "none")
 		updates["mediaenc"] = w.mediaenc->currentText();
 	if (w.medianat->currentText() != "none")
@@ -486,6 +582,23 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 	 * since the AOR is the account's identity). */
 	if (!w.sipDomain->text().isEmpty())
 		updateAccountsDomain(w.sipDomain->text(), index);
+
+	/* Enabled transitions — ua_* / mem_deref must run on the re
+	 * thread, so they all go through the mqueue. */
+	if (ua) {
+		if (w.enabled->isChecked())
+			qt_mod_register(ua);
+		else
+			qt_mod_ua_free(ua);   /* unload, like startup */
+	}
+	else if (w.enabled->isChecked()) {
+		/* No UA (account was disabled at startup): recreate it
+		 * from the just-written accounts-file line. ua_alloc
+		 * registers itself when regint > 0. */
+		QString newLine = accountLine(index);
+		if (!newLine.isEmpty())
+			qt_mod_ua_alloc(newLine);
+	}
 }
 
 

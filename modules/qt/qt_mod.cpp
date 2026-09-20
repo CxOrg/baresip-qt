@@ -295,6 +295,24 @@ static void mqueue_handler(int id, void *data, void *arg)
 	case MQ_UNREGISTER:
 		ua_unregister(static_cast<struct ua *>(data));
 		break;
+
+	case MQ_UA_ALLOC: {
+		char *aor = static_cast<char *>(data);
+		struct ua *newua = NULL;
+		err = ua_alloc(&newua, aor);
+		if (err)
+			BS_WARNING("qt: failed to create account: %m\n", err);
+		mem_deref(data);
+		break;
+	}
+
+	case MQ_UA_FREE: {
+		struct ua *ua = static_cast<struct ua *>(data);
+		if (qt_mod_obj.ua_cur == ua)
+			qt_mod_obj.ua_cur = NULL;
+		mem_deref(ua);
+		break;
+	}
 	}
 }
 
@@ -343,6 +361,24 @@ void qt_mod_register(struct ua *ua)
 void qt_mod_unregister(struct ua *ua)
 {
 	mqueue_push(qt_mod_obj.mq, MQ_UNREGISTER, ua);
+}
+
+
+void qt_mod_ua_alloc(const QString &line)
+{
+	/* Recreate a UA from an accounts-file line (re-enabling an
+	 * account that was disabled at startup). ua_alloc registers
+	 * the account itself when regint > 0. */
+	char *buf = NULL;
+	if (str_dup(&buf, line.trimmed().toUtf8().constData()))
+		return;
+	mqueue_push(qt_mod_obj.mq, MQ_UA_ALLOC, buf);
+}
+
+
+void qt_mod_ua_free(struct ua *ua)
+{
+	mqueue_push(qt_mod_obj.mq, MQ_UA_FREE, ua);
 }
 
 
@@ -396,10 +432,12 @@ static int qt_thread(void *arg)
 }
 
 
-/** Unregister accounts marked ";enabled=no" in ~/.baresip/accounts.
+/** Destroy accounts marked ";enabled=no" in ~/.baresip/accounts.
  *  Runs at module_init — ua_init has already populated uag_list, so
- *  the Nth non-comment line maps to the Nth UA. Disabled accounts stay
- *  loaded (visible in the settings panel) but never connect.
+ *  the Nth non-comment line maps to the Nth UA. mem_deref() deletes
+ *  the UA entirely (same as the /uadel command): it is unlinked from
+ *  uag_list, never registers, and doesn't appear in the Account menu.
+ *  The settings panel still shows the line by parsing the file.
  */
 static void apply_enabled_accounts(void)
 {
@@ -418,14 +456,18 @@ static void apply_enabled_accounts(void)
 	f.close();
 
 	int i = 0;
-	struct le *le;
-	for (le = list_head(uag_list()); le; le = le->next, ++i) {
+	struct le *le = list_head(uag_list());
+	while (le) {
+		/* mem_deref() unlinks the node — fetch next first. */
+		struct le *next = le->next;
 		struct ua *ua = static_cast<struct ua *>(le->data);
 		if (i < enabled.size() && !enabled[i]) {
 			BS_INFO("qt: account %d disabled, "
-				"not registering\n", i + 1);
-			ua_unregister(ua);
+				"not loading\n", i + 1);
+			mem_deref(ua);
 		}
+		le = next;
+		++i;
 	}
 }
 
