@@ -232,7 +232,7 @@ void CallDialog::showPanel()
 					LayerShellQt::Window::AnchorRight);
 				marginT = 60;
 
-				marginR = 4;
+				marginR = 12;
 
 				ls->setAnchors(anchors);
 				ls->setMargins(QMargins(0, marginT, marginR, marginB));
