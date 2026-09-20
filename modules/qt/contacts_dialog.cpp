@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QFrame>
+#include <QMessageBox>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
@@ -174,16 +175,30 @@ void ContactsDialog::setupLayerShell()
 
 
 /** Build one tab page: a stacked widget holding the list (page 0)
- *  and the overlay edit form (page 1). */
+ *  and the overlay edit form (page 1). An "Add" button below the
+ *  list and a "Delete" button on the form are created only when the
+ *  corresponding output pointers are non-null. */
 static QStackedWidget *buildTabPage(QListWidget **list,
 				    QLineEdit **nameEdit, QLineEdit **numEdit,
 				    QPushButton **saveBtn, QPushButton **backBtn,
+				    QPushButton **delBtn, QPushButton **addBtn,
 				    QWidget *parent)
 {
 	auto *stack = new QStackedWidget(parent);
 
-	*list = new QListWidget(stack);
-	stack->addWidget(*list);
+	auto *listPage = new QWidget(stack);
+	auto *listLay = new QVBoxLayout(listPage);
+	listLay->setContentsMargins(0, 0, 0, 0);
+	*list = new QListWidget(listPage);
+	listLay->addWidget(*list);
+	if (addBtn) {
+		auto *addRow = new QHBoxLayout();
+		addRow->addStretch();
+		*addBtn = new QPushButton("Add", listPage);
+		addRow->addWidget(*addBtn);
+		listLay->addLayout(addRow);
+	}
+	stack->addWidget(listPage);
 
 	auto *formPage = new QWidget(stack);
 	auto *form = new QFormLayout(formPage);
@@ -194,14 +209,30 @@ static QStackedWidget *buildTabPage(QListWidget **list,
 
 	auto *btnRow = new QHBoxLayout();
 	*saveBtn = new QPushButton("Save Contact", formPage);
-	*backBtn = new QPushButton("Back", formPage);
 	btnRow->addWidget(*saveBtn);
+	if (delBtn) {
+		*delBtn = new QPushButton("Delete", formPage);
+		btnRow->addWidget(*delBtn);
+	}
 	btnRow->addStretch();
+	*backBtn = new QPushButton("Back", formPage);
 	btnRow->addWidget(*backBtn);
 	form->addRow(btnRow);
 
 	stack->addWidget(formPage);
 	return stack;
+}
+
+
+/** A usable contact number needs at least 4 digits. */
+static bool validNumber(const QString &s)
+{
+	int digits = 0;
+	for (const QChar c : s) {
+		if (c.isDigit())
+			++digits;
+	}
+	return digits >= 4;
 }
 
 
@@ -220,22 +251,33 @@ void ContactsDialog::buildUi()
 	layout->addWidget(tabs_);
 
 	/* ---- Contacts tab ---- */
-	QPushButton *cSave, *cBack;
+	QPushButton *cSave, *cBack, *cDel, *cAdd;
 	contactsStack_ = buildTabPage(&contactsList_, &cNameEdit_,
-				      &cNumEdit_, &cSave, &cBack, tabs_);
+				      &cNumEdit_, &cSave, &cBack,
+				      &cDel, &cAdd, tabs_);
 	tabs_->addTab(contactsStack_, "Contacts");
 
 	connect(contactsList_, &QListWidget::itemClicked,
 		this, &ContactsDialog::onContactClicked);
 	connect(cSave, &QPushButton::clicked,
 		this, &ContactsDialog::onSaveContactEdit);
+	connect(cDel, &QPushButton::clicked,
+		this, &ContactsDialog::onDeleteContact);
 	connect(cBack, &QPushButton::clicked,
 		this, &ContactsDialog::onCancelContactEdit);
+	connect(cAdd, &QPushButton::clicked, this, [this]() {
+		/* Add mode: empty form, editingIndex_ -1. */
+		editingIndex_ = -1;
+		cNameEdit_->clear();
+		cNumEdit_->clear();
+		contactsStack_->setCurrentIndex(1);
+	});
 
 	/* ---- History tab ---- */
 	QPushButton *hSave, *hBack;
 	historyStack_ = buildTabPage(&historyList_, &hNameEdit_,
-				     &hNumEdit_, &hSave, &hBack, tabs_);
+				     &hNumEdit_, &hSave, &hBack,
+				     nullptr, nullptr, tabs_);
 	tabs_->addTab(historyStack_, "History");
 
 	connect(historyList_, &QListWidget::itemClicked,
@@ -398,15 +440,41 @@ void ContactsDialog::onSaveContactEdit()
 {
 	QString name   = cNameEdit_->text().trimmed();
 	QString number = cNumEdit_->text().trimmed();
-	if (number.isEmpty() || editingIndex_ < 0
-	    || editingIndex_ >= entries_.size())
+	if (!validNumber(number)) {
+		QMessageBox::warning(this, "Invalid number",
+			"Enter a number with at least 4 digits.");
+		return;
+	}
+
+	if (editingIndex_ >= 0 && editingIndex_ < entries_.size()) {
+		/* Edit existing. */
+		ContactEntry &e = entries_[editingIndex_];
+		QString oldNumber = uriToNumber(e.uri.toUtf8().constData());
+		e.name = name;
+		if (number != oldNumber)
+			e.uri = completeUri(number, uriHost(e.uri));
+	}
+	else {
+		/* Add mode (Add button): append a new contact. */
+		ContactEntry e;
+		e.name = name;
+		e.uri  = completeUri(number, QString());
+		entries_.append(e);
+	}
+
+	saveContacts();
+	reloadContacts();
+	contactsStack_->setCurrentIndex(0);
+}
+
+
+void ContactsDialog::onDeleteContact()
+{
+	if (editingIndex_ < 0 || editingIndex_ >= entries_.size())
 		return;
 
-	ContactEntry &e = entries_[editingIndex_];
-	QString oldNumber = uriToNumber(e.uri.toUtf8().constData());
-	e.name = name;
-	if (number != oldNumber)
-		e.uri = completeUri(number, uriHost(e.uri));
+	entries_.removeAt(editingIndex_);
+	editingIndex_ = -1;
 
 	saveContacts();
 	reloadContacts();
@@ -418,8 +486,11 @@ void ContactsDialog::onSaveHistoryContact()
 {
 	QString name   = hNameEdit_->text().trimmed();
 	QString number = hNumEdit_->text().trimmed();
-	if (number.isEmpty())
+	if (!validNumber(number)) {
+		QMessageBox::warning(this, "Invalid number",
+			"Enter a number with at least 4 digits.");
 		return;
+	}
 
 	ContactEntry e;
 	e.name   = name;

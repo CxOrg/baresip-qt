@@ -76,6 +76,7 @@ private slots:
 	void onHistoryClicked(QListWidgetItem *item);
 	void onSaveContactEdit();
 	void onSaveHistoryContact();
+	void onDeleteContact();
 	void onCancelContactEdit();
 	void onCancelHistoryEdit();
 };
