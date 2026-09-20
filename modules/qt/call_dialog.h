@@ -94,6 +94,7 @@ private:
 	void applyState();
 	void positionNearTray();
 	void setupLayerShell();
+	void fitWidthToHistory();
 
 	State state_;
 	quintptr callPtr_ = 0;

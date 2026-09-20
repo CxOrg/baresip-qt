@@ -203,9 +203,42 @@ void CallDialog::positionNearTray()
 }
 
 
+void CallDialog::fitWidthToHistory()
+{
+	/* Widen the dialog to fit the longest history entry without
+	 * text wrap or ellipsis. Measure the text width with the
+	 * list widget's actual font. */
+	if (!historyList_ || historyList_->count() == 0)
+		return;
+
+	int maxWidth = 0;
+	QFontMetrics fm(historyList_->font());
+	for (int i = 0; i < historyList_->count(); ++i) {
+		QListWidgetItem *it = historyList_->item(i);
+		int iconWidth = it->icon().isNull() ? 0 : 24;
+		maxWidth = std::max(maxWidth,
+			fm.horizontalAdvance(it->text()) + iconWidth + 20);
+	}
+
+	/* Add space for the vertical scrollbar and frame margins. */
+	maxWidth += style()->pixelMetric(QStyle::PM_ScrollBarExtent) + 8;
+
+	/* Don't shrink below the initial width (buttons + label). */
+	if (maxWidth < 340)
+		maxWidth = 340;
+
+	resize(maxWidth, height());
+}
+
+
 void CallDialog::showPanel()
 {
+	/* Fit the dialog width to the history content before showing,
+	 * so the full text of each entry is visible without ellipsis.
+	 * Call after adjustSize() so adjustSize doesn't override it. */
 	adjustSize();
+	if (state_ == State::Dialing)
+		fitWidthToHistory();
 
 #ifdef HAVE_LAYERSHELL
 	if (layerShellApplied_) {
@@ -519,26 +552,6 @@ void CallDialog::refreshHistory()
 		item->setData(Qt::UserRole, e.uri);
 		historyList_->addItem(item);
 	}
-
-	/* Widen the dialog to fit the longest history entry without
-	 * text wrap. Measure the text width with the list's font. */
-	int maxWidth = 0;
-	QFontMetrics fm(historyList_->font());
-	for (int i = 0; i < historyList_->count(); ++i) {
-		QListWidgetItem *it = historyList_->item(i);
-		int iconWidth = it->icon().isNull() ? 0 : 24;
-		maxWidth = std::max(maxWidth,
-			fm.horizontalAdvance(it->text()) + iconWidth + 20);
-	}
-
-	/* Add space for the vertical scrollbar. */
-	maxWidth += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
-
-	/* Don't shrink below the initial width (buttons + label). */
-	if (maxWidth < 340)
-		maxWidth = 340;
-
-	resize(maxWidth, height());
 }
 
 
