@@ -19,6 +19,8 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
+#include <QPointer>
+#include <QCoreApplication>
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -136,9 +138,57 @@ void CallDialog::positionNearTray()
 
 void CallDialog::showPanel()
 {
-	/* Position before showing so it appears in the right place. */
 	adjustSize();
-	positionNearTray();
+
+	/* Get desired position near tray icon. */
+	QRect iconGeo;
+	if (trayIcon_)
+		iconGeo = trayIcon_->geometry();
+	QPoint pos = (!iconGeo.isNull() && !iconGeo.isEmpty())
+		     ? iconGeo.bottomLeft() : QCursor::pos();
+
+	/* On Wayland, Qt::Popup needs a transient parent that has
+	 * received input. Create a tiny proxy widget at the tray
+	 * position to serve as parent. This gives us:
+	 *  - Positioning near the tray icon (popup relative to proxy)
+	 *  - Foreground (popups are always on top)
+	 *  - Click-outside-to-close (popup grab behavior) */
+	static QPointer<QWidget> proxy;
+	if (!proxy) {
+		proxy = new QWidget();
+		proxy->setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
+		proxy->resize(1, 1);
+		proxy->setAttribute(Qt::WA_ShowWithoutActivating);
+	}
+	proxy->move(pos);
+	proxy->show();
+	proxy->activateWindow();
+	QCoreApplication::processEvents();
+
+	/* Reparent to proxy with Popup flags. */
+	setParent(proxy, Qt::Popup | Qt::FramelessWindowHint);
+
+	/* Position relative to proxy (which is at the tray icon):
+	 * open upward, clamped to screen edges. */
+	QSize sz = sizeHint();
+	QScreen *screen = QGuiApplication::screenAt(pos);
+	if (!screen)
+		screen = QGuiApplication::primaryScreen();
+	QRect avail = screen ? screen->availableGeometry()
+			     : QRect(0, 0, 1920, 1080);
+
+	int x = 0;
+	int y = -sz.height();  /* open upward from tray icon */
+
+	/* If opening upward goes off screen, open downward. */
+	if (pos.y() - sz.height() < avail.top())
+		y = 1;  /* just below proxy */
+
+	/* Clamp horizontally so panel stays on-screen. */
+	if (pos.x() + sz.width() > avail.right())
+		x = avail.right() - pos.x() - sz.width();
+
+	move(x, y);
 	show();
 	raise();
 	activateWindow();
