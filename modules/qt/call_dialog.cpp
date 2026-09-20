@@ -82,9 +82,9 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * render transparent instead of black. */
 	setStyleSheet(
 		"QDialog { background-color: #13161b;"
-		"          border: 2px solid #2a2e33;"
 		"          border-radius: 8px; }"
 		"QFrame#callPanel { background-color: palette(window);"
+		"         border: 2px solid #2a2e33;"
 		"         border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -108,9 +108,9 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QDialog { background-color: #13161b;"
-		"          border: 2px solid #2a2e33;"
 		"          border-radius: 8px; }"
 		"QFrame#callPanel { background-color: palette(window);"
+		"         border: 2px solid #2a2e33;"
 		"         border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
