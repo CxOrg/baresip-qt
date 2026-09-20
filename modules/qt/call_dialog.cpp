@@ -75,6 +75,13 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
+	/* Rounded corners via translucent background + stylesheet.
+	 * WA_TranslucentBackground lets the rounded corners show
+	 * through; the stylesheet rounds the top-level widget. */
+	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
+		"QDialog { background-color: palette(window);"
+		"           border-radius: 12px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -94,6 +101,10 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
+	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
+		"QDialog { background-color: palette(window);"
+		"           border-radius: 12px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
