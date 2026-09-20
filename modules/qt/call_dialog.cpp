@@ -19,8 +19,9 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
-#include <QPointer>
-#include <QCoreApplication>
+#ifdef HAVE_LAYERSHELL
+#include <LayerShellQt/Window>
+#endif
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -97,9 +98,9 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 
 void CallDialog::positionNearTray()
 {
-	/* Try to get the tray icon geometry. Under KDE Plasma/Wayland
-	 * QSystemTrayIcon::geometry() often returns an empty rect, so
-	 * fall back to the cursor position (the click that opened us). */
+	/* With LayerShellQt, positioning is handled by the compositor
+	 * via anchors and margins -- see showPanel(). This method is
+	 * only used as a fallback for non-layer-shell environments. */
 	QRect iconGeo;
 	if (trayIcon_)
 		iconGeo = trayIcon_->geometry();
@@ -108,12 +109,9 @@ void CallDialog::positionNearTray()
 	if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
 		pos = iconGeo.bottomLeft();
 	} else {
-		/* Fall back to the current cursor position. */
 		pos = QCursor::pos();
 	}
 
-	/* Move up so the panel opens upward from the icon (like a
-	 * tray menu), and clamp to the nearest screen. */
 	QSize sz = sizeHint();
 	QScreen *screen = QGuiApplication::screenAt(pos);
 	if (!screen)
@@ -123,12 +121,10 @@ void CallDialog::positionNearTray()
 
 	int x = pos.x();
 	int y = pos.y() - sz.height();
-	/* Clamp horizontally so the panel stays on-screen. */
 	if (x + sz.width() > avail.right())
 		x = avail.right() - sz.width();
 	if (x < avail.left())
 		x = avail.left();
-	/* If it goes off the top, open downward instead. */
 	if (y < avail.top())
 		y = pos.y();
 
@@ -140,55 +136,65 @@ void CallDialog::showPanel()
 {
 	adjustSize();
 
-	/* Get desired position near tray icon. */
-	QRect iconGeo;
-	if (trayIcon_)
-		iconGeo = trayIcon_->geometry();
-	QPoint pos = (!iconGeo.isNull() && !iconGeo.isEmpty())
-		     ? iconGeo.bottomLeft() : QCursor::pos();
+#ifdef HAVE_LAYERSHELL
+	/* Use the Wayland layer-shell protocol (via LayerShellQt) to
+	 * anchor the panel near the system tray. This gives us:
+	 *  - Correct positioning near the tray icon (bottom-right edge)
+	 *  - Always-on-top (Overlay layer)
+	 *  - Keyboard input without popup grabbing
+	 *  - No transient-parent requirement (works on Wayland) */
+	show();  /* Create the QWindow handle first. */
 
-	/* On Wayland, Qt::Popup needs a transient parent that has
-	 * received input. Create a tiny proxy widget at the tray
-	 * position to serve as parent. This gives us:
-	 *  - Positioning near the tray icon (popup relative to proxy)
-	 *  - Foreground (popups are always on top)
-	 *  - Click-outside-to-close (popup grab behavior) */
-	static QPointer<QWidget> proxy;
-	if (!proxy) {
-		proxy = new QWidget();
-		proxy->setWindowFlags(Qt::FramelessWindowHint | Qt::Tool);
-		proxy->resize(1, 1);
-		proxy->setAttribute(Qt::WA_ShowWithoutActivating);
+	QWindow *win = windowHandle();
+	if (win) {
+		auto *ls = LayerShellQt::Window::get(win);
+		if (ls) {
+			/* Anchor to bottom-right corner (where the tray
+			 * typically lives), opening upward. */
+			ls->setAnchors(LayerShellQt::Window::AnchorBottom |
+				       LayerShellQt::Window::AnchorRight);
+			ls->setLayer(LayerShellQt::Window::LayerOverlay);
+			ls->setKeyboardInteractivity(
+				LayerShellQt::Window::KeyboardInteractivityOnDemand);
+			ls->setScope("baresip-call-panel");
+			ls->setCloseOnDismissed(true);
+
+			/* Margins to offset from the screen corner so the
+			 * panel appears near the tray icon rather than
+			 * flush in the corner. Use the tray icon geometry
+			 * if available, otherwise a reasonable default. */
+			QRect iconGeo;
+			if (trayIcon_)
+				iconGeo = trayIcon_->geometry();
+
+			int marginR, marginB;
+			if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
+				/* Position the panel's right edge at the
+				 * tray icon's right edge, and the panel's
+				 * bottom edge at the tray icon's top. */
+				QScreen *screen = QGuiApplication::screenAt(
+							iconGeo.bottomRight());
+				if (!screen)
+					screen = QGuiApplication::primaryScreen();
+				QRect avail = screen ? screen->availableGeometry()
+						     : QRect(0,0,1920,1080);
+				marginR = avail.right() - iconGeo.right();
+				marginB = avail.bottom() - iconGeo.top() + 1;
+			} else {
+				/* Default: small offset from the corner. */
+				marginR = 4;
+				marginB = 40;  /* above the tray bar */
+			}
+
+			ls->setMargins(QMargins(0, 0, marginR, marginB));
+			ls->setDesiredSize(size());
+			return;
+		}
 	}
-	proxy->move(pos);
-	proxy->show();
-	proxy->activateWindow();
-	QCoreApplication::processEvents();
-
-	/* Reparent to proxy with Popup flags. */
-	setParent(proxy, Qt::Popup | Qt::FramelessWindowHint);
-
-	/* Position relative to proxy (which is at the tray icon):
-	 * open upward, clamped to screen edges. */
-	QSize sz = sizeHint();
-	QScreen *screen = QGuiApplication::screenAt(pos);
-	if (!screen)
-		screen = QGuiApplication::primaryScreen();
-	QRect avail = screen ? screen->availableGeometry()
-			     : QRect(0, 0, 1920, 1080);
-
-	int x = 0;
-	int y = -sz.height();  /* open upward from tray icon */
-
-	/* If opening upward goes off screen, open downward. */
-	if (pos.y() - sz.height() < avail.top())
-		y = 1;  /* just below proxy */
-
-	/* Clamp horizontally so panel stays on-screen. */
-	if (pos.x() + sz.width() > avail.right())
-		x = avail.right() - pos.x() - sz.width();
-
-	move(x, y);
+	/* Fall through if layer shell isn't actually available at runtime. */
+#endif
+	/* Fallback: plain frameless tool window, positioned manually. */
+	positionNearTray();
 	show();
 	raise();
 	activateWindow();
@@ -198,9 +204,8 @@ void CallDialog::showPanel()
 bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 {
 	/* Close the panel when it loses focus (click-outside behavior
-	 * to emulate Qt::Popup without Wayland's transient-parent
-	 * requirement). Only do this in Dialing state -- incoming and
-	 * in-call panels should stay open until the call ends. */
+	 * to emulate Qt::Popup). Only in Dialing state -- incoming and
+	 * in-call panels stay open until the call ends. */
 	if (obj == this && event->type() == QEvent::ActivationChange) {
 		if (!isActiveWindow() && state_ == State::Dialing) {
 			hide();
