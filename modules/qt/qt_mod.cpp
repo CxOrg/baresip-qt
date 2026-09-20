@@ -440,6 +440,19 @@ static int qt_thread(void *arg)
 	bevent_register(event_handler, mod);
 	mod->run = true;
 
+	/* Deliver a dial number that arrived before the tray was up
+	 * (baresip -e "qtdial <num>" fallback path). */
+	{
+		QString pending;
+		{
+			std::lock_guard<std::mutex> lk(mod->dial_mtx);
+			pending = mod->pending_dial;
+			mod->pending_dial.clear();
+		}
+		if (!pending.isEmpty())
+			tray.openDialNumber(pending);
+	}
+
 	app.exec();
 
 	mod->run = false;
@@ -448,6 +461,53 @@ static int qt_thread(void *arg)
 
 	return 0;
 }
+
+
+/** "qtdial" command — used by baresip-qt-handler for tel: links.
+ *  Opens the dial panel with the number populated; the user confirms
+ *  with the green button. Runs on the re thread (ctrl_tcp / -e). */
+static int qtdial_handler(struct re_printf *pf, void *arg)
+{
+	const struct cmd_arg *carg = static_cast<const struct cmd_arg *>(arg);
+	(void)pf;
+
+	if (!str_isset(carg->prm))
+		return EINVAL;
+
+	QString number = uriToNumber(carg->prm);
+	if (number.isEmpty())
+		return EINVAL;
+
+	/* Stash the number, then queue delivery. If the Qt app isn't
+	 * up yet (baresip -e "qtdial ..." fallback can run before the
+	 * qt thread creates QApplication) qt_thread delivers it after
+	 * the tray is created. Otherwise the lambda runs inside
+	 * app.exec(), by which time mod->tray is always set. */
+	struct qt_mod *mod = &qt_mod_obj;
+	{
+		std::lock_guard<std::mutex> lk(mod->dial_mtx);
+		mod->pending_dial = number;
+	}
+	if (qApp) {
+		QMetaObject::invokeMethod(qApp, []() {
+			struct qt_mod *m = &qt_mod_obj;
+			QString n;
+			{
+				std::lock_guard<std::mutex> lk(m->dial_mtx);
+				n = m->pending_dial;
+				m->pending_dial.clear();
+			}
+			if (!n.isEmpty() && m->tray)
+				m->tray->openDialNumber(n);
+		}, Qt::QueuedConnection);
+	}
+	return 0;
+}
+
+
+static const struct cmd qt_cmdv[] = {
+	{"qtdial", 0, CMD_PRM, "Open dial panel with number", qtdial_handler},
+};
 
 
 /** Destroy accounts marked ";enabled=no" in ~/.baresip/accounts.
@@ -508,6 +568,11 @@ static int module_init(void)
 	if (err)
 		return err;
 
+	err = cmd_register(baresip_commands(), qt_cmdv,
+			   ARRAY_SIZE(qt_cmdv));
+	if (err)
+		return err;
+
 	return 0;
 }
 
@@ -524,6 +589,7 @@ static int module_close(void)
 	qt_mod_obj.mq = static_cast<struct mqueue *>(mem_deref(qt_mod_obj.mq));
 
 	bevent_unregister(event_handler);
+	cmd_unregister(baresip_commands(), qt_cmdv);
 
 	return 0;
 }

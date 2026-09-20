@@ -9,6 +9,7 @@
 
 #include <QObject>
 #include <QString>
+#include <mutex>
 
 extern "C" {
 #include <re.h>
@@ -58,6 +59,11 @@ struct qt_mod {
 	TrayApp *tray = nullptr;
 	struct ua *ua_cur = nullptr;
 	bool clean_number = false;
+	/* Number passed via the "qtdial" command (tel: links). Stored
+	 * under dial_mtx so it can be delivered to the tray once the
+	 * Qt app is up (the -e fallback path can race startup). */
+	std::mutex dial_mtx;
+	QString pending_dial;
 };
 
 extern struct qt_mod qt_mod_obj;

@@ -313,6 +313,17 @@ void TrayApp::onStatusToggled(QAction *action)
 }
 
 
+void TrayApp::openDialNumber(QString number)
+{
+	/* tel: link / qtdial command: open the dial panel with the
+	 * number populated — the user confirms with the green button
+	 * (which also becomes the hangup once the call starts). */
+	onDial();
+	if (idleCallDialog_ && !number.isEmpty())
+		idleCallDialog_->setDialNumber(number);
+}
+
+
 void TrayApp::onDialContact(QAction *action)
 {
 	/* Pass the contact's number to the dial panel — the user

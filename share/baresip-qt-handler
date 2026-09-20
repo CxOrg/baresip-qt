@@ -8,7 +8,9 @@
 # instance is reachable, falls back to launching baresip with a "dial"
 # command so a fresh instance places the call.
 #
-# The number is passed to baresip's "dial" command; baresip's
+# The number is passed to the qt module's "qtdial" command, which opens
+# the dial panel with the number populated — the user confirms the call
+# with the green button. On dialing, baresip's
 # account_uri_complete_strdup() will prepend "sip:" and append the
 # account domain if the URI has no scheme/host, so a bare E.164 number
 # like "+441234567890" becomes "sip:+441234567890@<account-domain>".
@@ -38,7 +40,7 @@ uri=$(printf %s "$uri" | sed -E 's/[[:space:]()-]//g; s/%20//g')
 
 [ -n "$uri" ] || { echo "baresip-qt-handler: empty number" >&2; exit 1; }
 
-json=$(printf '{"command":"dial","params":"%s"}' "$uri")
+json=$(printf '{"command":"qtdial","params":"%s"}' "$uri")
 # netstring frame: <len>:<payload>,
 len=${#json}
 frame=$(printf '%s:%s,' "$len" "$json")
@@ -63,4 +65,4 @@ if send_via_ctrl_tcp; then
 fi
 
 # Fallback: no running instance (or ctrl_tcp not enabled) -- launch one.
-exec baresip -e "dial $uri"
+exec baresip -e "qtdial $uri"
