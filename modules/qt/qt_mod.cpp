@@ -77,12 +77,13 @@ QString accountLabel(struct ua *ua)
 }
 
 
-/** Height of the top-edge Plasma panel holding the system tray,
- *  queried from plasmashell's evaluateScript() D-Bus API. Needed
- *  because dodge/autohide panels don't reserve an available-geometry
- *  strut. Returns 0 when plasmashell is unreachable or reports
+/** Height of the Plasma panel holding the system tray, queried
+ *  from plasmashell's evaluateScript() D-Bus API. Needed because
+ *  dodge/autohide panels don't reserve an available-geometry strut.
+ *  `isBottom` reports whether that panel sits on the bottom screen
+ *  edge. Returns 0 when plasmashell is unreachable or reports
  *  nothing. */
-static int queryTrayPanelHeight(QScreen *screen)
+static int queryTrayPanel(QScreen *screen, bool *isBottom)
 {
 	QDBusInterface iface(QStringLiteral("org.kde.plasmashell"),
 		QStringLiteral("/PlasmaShell"),
@@ -92,17 +93,16 @@ static int queryTrayPanelHeight(QScreen *screen)
 		return 0;
 
 	/* evaluateScript() returns whatever the script prints. Emit
-	 * "screenIndex:height" for each top-edge panel containing the
+	 * "screenIndex:location:height" for each panel containing the
 	 * org.kde.plasma.systemtray widget. */
 	static const char script[] =
 		"for (var i=0;i<panelIds.length;i++){"
 		"var p=panelById(panelIds[i]);"
-		"if (p.location!=='top') continue;"
 		"var ws=p.widgets(); var t=false;"
 		"for (var j=0;j<ws.length;j++)"
 		"if (ws[j].type==='org.kde.plasma.systemtray')"
 		"{t=true;break;}"
-		"if (t) print(p.screen+':'+p.height);}";
+		"if (t) print(p.screen+':'+p.location+':'+p.height);}";
 
 	QDBusReply<QString> r = iface.call(QStringLiteral("evaluateScript"),
 					   QLatin1String(script));
@@ -110,23 +110,34 @@ static int queryTrayPanelHeight(QScreen *screen)
 		return 0;
 
 	/* Prefer a panel on the anchor's screen (panel.screen == -1
-	 * means unassigned); otherwise any tray panel's height. */
+	 * means unassigned); otherwise any tray panel. */
 	int target = screen ? QGuiApplication::screens().indexOf(screen) : 0;
 	int hAny = 0, hScr = 0;
+	bool bAny = false, bScr = false;
 	for (const QString &line : r.value().split('\n', Qt::SkipEmptyParts)) {
 		QStringList kv = line.trimmed().split(':');
-		if (kv.size() != 2)
+		if (kv.size() != 3)
 			continue;
-		int scr = kv[0].toInt(), h = kv[1].toInt();
-		hAny = qMax(hAny, h);
-		if (scr == target || scr == -1)
-			hScr = qMax(hScr, h);
+		int scr = kv[0].toInt(), h = kv[2].toInt();
+		bool bottom = (kv[1] == QLatin1String("bottom"));
+		if (h > hAny) {
+			hAny = h;
+			bAny = bottom;
+		}
+		if ((scr == target || scr == -1) && h > hScr) {
+			hScr = h;
+			bScr = bottom;
+		}
 	}
+
+	if (isBottom)
+		*isBottom = hScr > 0 ? bScr : bAny;
 	return hScr > 0 ? hScr : hAny;
 }
 
 
-QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft)
+QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
+			bool *anchorBottom)
 {
 	/* Screen containing the anchor point (tray icon position),
 	 * else the primary screen. */
@@ -139,20 +150,29 @@ QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft)
 	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
 	QRect avail = screen ? screen->availableGeometry() : full;
 
-	/* Top margin = tray-panel height + 16px gap. The geometry
-	 * strut covers reserve-space panels; the D-Bus query covers
-	 * dodge/autohide panels which leave no strut. */
-	int top = qMax(avail.top() - full.top(),
-		       queryTrayPanelHeight(screen)) + 16;
-
 	/* Anchor to the screen edge on the tray icon's half of the
 	 * screen: left half anchors left, otherwise right. */
 	bool left = !anchorPos.isNull() &&
 		anchorPos.x() < full.center().x();
 	if (anchorLeft)
 		*anchorLeft = left;
+	int side = left ? 8 : 0, other = left ? 0 : 8;
 
-	return left ? QMargins(8, top, 0, 0) : QMargins(0, top, 8, 0);
+	/* Vertical margin = tray-panel height + 16px gap, applied on
+	 * the edge the tray panel sits on. The geometry strut covers
+	 * reserve-space panels; the D-Bus query covers dodge/autohide
+	 * panels which leave no strut. */
+	bool bottom = false;
+	int trayH = queryTrayPanel(screen, &bottom);
+	if (anchorBottom)
+		*anchorBottom = bottom;
+
+	if (bottom) {
+		int b = qMax(full.bottom() - avail.bottom(), trayH) + 16;
+		return QMargins(side, 0, other, b);
+	}
+	int t = qMax(avail.top() - full.top(), trayH) + 16;
+	return QMargins(side, t, other, 0);
 }
 
 
@@ -165,10 +185,11 @@ void qtPanelApplyAnchors(QWindow *win, const QPoint &anchorPos)
 	if (!ls)
 		return;
 
-	bool left = false;
-	QMargins m = qtPanelMargins(anchorPos, &left);
+	bool left = false, bottom = false;
+	QMargins m = qtPanelMargins(anchorPos, &left, &bottom);
 	ls->setAnchors(LayerShellQt::Window::Anchors(
-		LayerShellQt::Window::AnchorTop |
+		(bottom ? LayerShellQt::Window::AnchorBottom
+			: LayerShellQt::Window::AnchorTop) |
 		(left ? LayerShellQt::Window::AnchorLeft
 		      : LayerShellQt::Window::AnchorRight)));
 	ls->setMargins(m);

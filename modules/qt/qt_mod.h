@@ -95,11 +95,13 @@ QString uriToNumber(const char *uri);
 QString accountLabel(struct ua *ua);
 
 /** Layer-shell margins for the popup panels. `anchorPos` (e.g. the
- *  tray-icon click position) selects the screen; the top margin is
- *  the tray panel's height + 16px. When the anchor is on the left
- *  half of its screen the panel anchors to the left edge (margin
- *  8px) instead of the right; `anchorLeft` reports the choice. */
-QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft);
+ *  tray-icon click position) selects the screen; the margin is the
+ *  tray panel's height + 16px on the screen edge holding the tray
+ *  (top or bottom), and 8px on the horizontal edge nearest the
+ *  anchor's half of the screen. `anchorLeft`/`anchorBottom` report
+ *  the chosen edges. */
+QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
+			bool *anchorBottom);
 
 class QWindow;
 /** Apply top + nearest-horizontal-edge anchors and the computed
