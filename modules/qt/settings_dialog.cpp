@@ -562,45 +562,9 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 		}
 	}
 
-	/* Apply live via account_set_*() APIs — only when the account
-	 * actually has a UA (disabled accounts have none). */
-	struct account *acc = ua ? ua_account(ua) : nullptr;
-	if (acc) {
-	QByteArray dn = w.displayName->text().toUtf8();
-	account_set_display_name(acc, dn.constData());
-
-	QByteArray au = w.authUser->text().toUtf8();
-	account_set_auth_user(acc, au.constData());
-
-	QByteArray ap = w.authPass->text().toUtf8();
-	account_set_auth_pass(acc, ap.constData());
-
-	account_set_regint(acc, w.regint->value());
-
-	QByteArray sh = w.stunHost->text().toUtf8();
-	account_set_stun_host(acc, sh.constData());
-	account_set_stun_port(acc, w.stunPort->value());
-
-	QByteArray su = w.stunUser->text().toUtf8();
-	account_set_stun_user(acc, su.constData());
-	QByteArray sp = w.stunPass->text().toUtf8();
-	account_set_stun_pass(acc, sp.constData());
-
-	account_set_answermode(acc,
-		static_cast<enum answermode>(w.answermode->currentData().toInt()));
-
-	QByteArray me = w.mediaenc->currentText().toUtf8();
-	if (me == "none") account_set_mediaenc(acc, NULL);
-	else             account_set_mediaenc(acc, me.constData());
-
-	QByteArray mn = w.medianat->currentText().toUtf8();
-	if (mn == "none") account_set_medianat(acc, NULL);
-	else              account_set_medianat(acc, mn.constData());
-
-	QByteArray ac = w.audioCodecs->text().toUtf8();
-	if (!ac.isEmpty())
-		account_set_audio_codecs(acc, ac.constData());
-	}
+	/* No account_set_*() live apply here — the UA is always
+	 * destroyed and recreated from the persisted file below, so
+	 * mutating it first would be discarded anyway. */
 
 	/* Persist to ~/.baresip/accounts (update known params in-place,
 	 * preserving unknown params like outbound, 100rel, etc.). Runs
@@ -639,27 +603,24 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 	updateAccountsParams(updates, index);
 
 	/* The SIP domain lives inside the <sip:user@domain> AOR, not in
-	 * a ;param — update it separately (takes effect on restart,
-	 * since the AOR is the account's identity). */
+	 * a ;param — update it separately. Takes effect via the UA
+	 * recreation below, since the AOR is the account's identity. */
 	if (!w.sipDomain->text().isEmpty())
 		updateAccountsDomain(w.sipDomain->text(), index);
 
 	/* Enabled transitions — ua_* / mem_deref must run on the re
-	 * thread, so they all go through the mqueue. */
-	if (ua) {
-		if (w.enabled->isChecked())
-			qt_mod_register(ua);
-		else
-			qt_mod_ua_free(ua);   /* unload, like startup */
-	}
-	else if (w.enabled->isChecked()) {
-		/* No UA (account was disabled at startup): recreate it
-		 * from the just-written accounts-file line. ua_alloc
-		 * registers itself when regint > 0. */
-		QString newLine = accountLine(index);
-		if (!newLine.isEmpty())
-			qt_mod_ua_alloc(newLine);
-	}
+	 * thread, so they all go through the mqueue. An updated
+	 * account is recreated (destroy + alloc) rather than just
+	 * re-registered: ua_register on a live registration leaves
+	 * the reg client stuck in "unregistering", while recreation
+	 * guarantees a clean disconnect and re-register with the new
+	 * parameters. The mqueue is FIFO so the free always runs
+	 * before the alloc. */
+	QString newLine = accountLine(index);
+	if (ua)
+		qt_mod_ua_free(ua);
+	if (w.enabled->isChecked() && !newLine.isEmpty())
+		qt_mod_ua_alloc(newLine);
 }
 
 
