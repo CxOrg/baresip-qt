@@ -19,6 +19,9 @@
 #include <QList>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QtDBus/QDBusInterface>
+#include <QtDBus/QDBusConnection>
+#include <QtDBus/QDBusReply>
 #ifdef HAVE_KSTYLE
 #include <kstylemanager.h>
 #endif
@@ -71,6 +74,55 @@ QString accountLabel(struct ua *ua)
 }
 
 
+/** Height of the top-edge Plasma panel holding the system tray,
+ *  queried from plasmashell's evaluateScript() D-Bus API. Needed
+ *  because dodge/autohide panels don't reserve an available-geometry
+ *  strut. Returns 0 when plasmashell is unreachable or reports
+ *  nothing. */
+static int queryTrayPanelHeight(QScreen *screen)
+{
+	QDBusInterface iface(QStringLiteral("org.kde.plasmashell"),
+		QStringLiteral("/PlasmaShell"),
+		QStringLiteral("org.kde.PlasmaShell"),
+		QDBusConnection::sessionBus());
+	if (!iface.isValid())
+		return 0;
+
+	/* evaluateScript() returns whatever the script prints. Emit
+	 * "screenIndex:height" for each top-edge panel containing the
+	 * org.kde.plasma.systemtray widget. */
+	static const char script[] =
+		"for (var i=0;i<panelIds.length;i++){"
+		"var p=panelById(panelIds[i]);"
+		"if (p.location!=='top') continue;"
+		"var ws=p.widgets(); var t=false;"
+		"for (var j=0;j<ws.length;j++)"
+		"if (ws[j].type==='org.kde.plasma.systemtray')"
+		"{t=true;break;}"
+		"if (t) print(p.screen+':'+p.height);}";
+
+	QDBusReply<QString> r = iface.call(QStringLiteral("evaluateScript"),
+					   QLatin1String(script));
+	if (!r.isValid())
+		return 0;
+
+	/* Prefer a panel on the anchor's screen (panel.screen == -1
+	 * means unassigned); otherwise any tray panel's height. */
+	int target = screen ? QGuiApplication::screens().indexOf(screen) : 0;
+	int hAny = 0, hScr = 0;
+	for (const QString &line : r.value().split('\n', Qt::SkipEmptyParts)) {
+		QStringList kv = line.trimmed().split(':');
+		if (kv.size() != 2)
+			continue;
+		int scr = kv[0].toInt(), h = kv[1].toInt();
+		hAny = qMax(hAny, h);
+		if (scr == target || scr == -1)
+			hScr = qMax(hScr, h);
+	}
+	return hScr > 0 ? hScr : hAny;
+}
+
+
 QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize)
 {
 	/* Screen containing the anchor point (tray icon position),
@@ -84,9 +136,11 @@ QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize)
 	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
 	QRect avail = screen ? screen->availableGeometry() : full;
 
-	/* Top margin = real top-panel height (the geometry strut is
-	 * the gap between full and available geometry) + 8px gap. */
-	int top = qMax(0, avail.top() - full.top()) + 8;
+	/* Top margin = tray-panel height + 8px gap. The geometry
+	 * strut covers reserve-space panels; the D-Bus query covers
+	 * dodge/autohide panels which leave no strut. */
+	int top = qMax(avail.top() - full.top(),
+		       queryTrayPanelHeight(screen)) + 8;
 
 	/* Right margin: place the panel's right edge at the click x,
 	 * like a menu growing leftward from the tray icon. Clamped so

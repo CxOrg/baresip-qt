@@ -1,10 +1,10 @@
 project(qt CXX)
 
 # Prefer Qt6 (KDE Plasma 6 / current distros), fall back to Qt5.
-find_package(Qt6 QUIET COMPONENTS Widgets)
+find_package(Qt6 QUIET COMPONENTS Widgets DBus)
 if(Qt6Widgets_FOUND)
   set(QT_VERSION_MAJOR 6)
-  set(QT_LIBRARIES Qt6::Widgets)
+  set(QT_LIBRARIES Qt6::Widgets Qt6::DBus)
   # KF6ConfigWidgets provides KStyleManager::initStyle() which
   # applies the user's configured KDE widget style (Breeze).
   find_package(KF6ConfigWidgets QUIET)
@@ -12,10 +12,10 @@ if(Qt6Widgets_FOUND)
     set(HAVE_KSTYLE ON)
   endif()
 else()
-  find_package(Qt5 QUIET COMPONENTS Widgets)
+  find_package(Qt5 QUIET COMPONENTS Widgets DBus)
   if(Qt5Widgets_FOUND)
     set(QT_VERSION_MAJOR 5)
-    set(QT_LIBRARIES Qt5::Widgets)
+    set(QT_LIBRARIES Qt5::Widgets Qt5::DBus)
     find_package(KF5ConfigWidgets QUIET)
     if(KF5ConfigWidgets_FOUND)
       set(HAVE_KSTYLE ON)
