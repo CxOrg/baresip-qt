@@ -5,6 +5,7 @@
 
 #include "qt_mod.h"
 
+#include <QSystemTrayIcon>
 #include <QMenu>
 #include <QActionGroup>
 #include <QHash>
@@ -13,7 +14,6 @@
 class CallDialog;
 class DialpadDialog;
 class SettingsDialog;
-class StatusNotifierItem;
 
 class TrayApp : public QObject {
 	Q_OBJECT
@@ -38,8 +38,7 @@ public slots:
 	void showWarning(QString title, QString text);
 
 private slots:
-	void onTrayActivated(int x, int y);
-	void onTrayContextMenu(int x, int y);
+	void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
 	void onDial();
 	void onAbout();
 	void onSettings();
@@ -67,7 +66,7 @@ private:
 
 	struct qt_mod *mod_;
 
-	StatusNotifierItem *sni_ = nullptr;
+	QSystemTrayIcon *trayIcon_ = nullptr;
 	QMenu *menu_ = nullptr;
 	QMenu *accountsMenu_ = nullptr;
 	QMenu *statusMenu_ = nullptr;
@@ -82,9 +81,6 @@ private:
 	QHash<quintptr, QPointer<CallDialog>> callDialogs_;
 
 	SettingsDialog *settingsDialog_ = nullptr;
-
-	/* Last known tray icon screen position (from SNI Activate x,y). */
-	QPoint lastTrayPos_;
 
 	/* Per-call submenus, keyed by call pointer. Created the moment a
 	 * call starts (incoming ring, or outgoing dial) and kept until

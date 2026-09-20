@@ -14,11 +14,11 @@
 #include <QListWidgetItem>
 #include <QPalette>
 #include <QIcon>
+#include <QSystemTrayIcon>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
-#include <QWindow>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
@@ -63,8 +63,8 @@ static QPushButton *makeButton(const QString &text,
 
 /* ---- CallDialog --------------------------------------------------- */
 
-CallDialog::CallDialog(QPoint anchor, QWidget *parent)
-	: QDialog(parent), state_(State::Dialing), anchor_(anchor)
+CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
+	: QDialog(parent), state_(State::Dialing), trayIcon_(trayIcon)
 {
 	setWindowTitle("Dial");
 	setAttribute(Qt::WA_DeleteOnClose, false);
@@ -76,17 +76,16 @@ CallDialog::CallDialog(QPoint anchor, QWidget *parent)
 	installEventFilter(this);
 	buildUi();
 	applyState();
-	setupLayerShell();
 }
 
 
 CallDialog::CallDialog(State state, quintptr callPtr,
 		       const QString &peerUri, const QString &peerName,
-		       QPoint anchor, QWidget *parent)
+		       QSystemTrayIcon *trayIcon, QWidget *parent)
 	: QDialog(parent), state_(state), callPtr_(callPtr),
 	  peerName_(peerName), isOutgoing_(state == State::InCall &&
 					  peerName.isEmpty()),
-	  anchor_(anchor)
+	  trayIcon_(trayIcon)
 {
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
@@ -94,7 +93,6 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
-	setupLayerShell();
 }
 
 
@@ -103,9 +101,16 @@ void CallDialog::positionNearTray()
 	/* With LayerShellQt, positioning is handled by the compositor
 	 * via anchors and margins -- see showPanel(). This method is
 	 * only used as a fallback for non-layer-shell environments. */
-	QPoint pos = anchor_;
-	if (pos.isNull())
+	QRect iconGeo;
+	if (trayIcon_)
+		iconGeo = trayIcon_->geometry();
+
+	QPoint pos;
+	if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
+		pos = iconGeo.bottomLeft();
+	} else {
 		pos = QCursor::pos();
+	}
 
 	QSize sz = sizeHint();
 	QScreen *screen = QGuiApplication::screenAt(pos);
@@ -127,126 +132,66 @@ void CallDialog::positionNearTray()
 }
 
 
-void CallDialog::setupLayerShell()
-{
-#ifdef HAVE_LAYERSHELL
-	/* Create the native window to get a QWindow handle, then
-	 * destroy the platform surface (xdg-shell) so LayerShellQt
-	 * can install its event filter. When show() is called later,
-	 * the event filter intercepts surface creation and uses the
-	 * layer-shell protocol instead. */
-	setAttribute(Qt::WA_NativeWindow);
-	winId();
-
-	QWindow *win = windowHandle();
-	if (!win)
-		return;
-
-	/* Destroy the xdg-shell surface but keep the QWindow object
-	 * so we can install the LayerShellQt event filter on it. */
-	win->destroy();
-
-	auto *ls = LayerShellQt::Window::get(win);
-	if (!ls)
-		return;
-
-	/* Anchors are set in showPanel() based on the tray icon's
-	 * screen position (top of screen → anchor top, drop down;
-	 * bottom of screen → anchor bottom, open upward). */
-	ls->setLayer(LayerShellQt::Window::LayerOverlay);
-	ls->setKeyboardInteractivity(
-		LayerShellQt::Window::KeyboardInteractivityOnDemand);
-	ls->setScope("baresip-call-panel");
-	ls->setCloseOnDismissed(true);
-	layerShellApplied_ = true;
-#endif
-}
-
-
 void CallDialog::showPanel()
 {
 	adjustSize();
 
 #ifdef HAVE_LAYERSHELL
-	if (layerShellApplied_) {
-		QWindow *win = windowHandle();
-		if (win) {
-			auto *ls = LayerShellQt::Window::get(win);
-			if (ls) {
-				/* Determine anchors and margins from the tray
-				 * icon's screen position. The icon's y is
-				 * inside the panel area (outside the available
-				 * geometry), so we anchor to the nearest
-				 * available-geometry edge and let the panel
-				 * extend inward from there.
-				 *
-				 * Top panel: anchor top, marginT=0 → panel
-				 *   starts at avail.top() (just below the panel
-				 *   bar) and drops down.
-				 * Bottom panel: anchor bottom, marginB=0 →
-				 *   panel ends at avail.bottom() (just above
-				 *   the panel bar) and opens upward.
-				 *
-				 * Horizontal: marginR aligns the right edge
-				 * of the popup with the icon's x position. */
-				LayerShellQt::Window::Anchors anchors;
-				int marginR = 4, marginT = 0, marginB = 0;
+	/* Use the Wayland layer-shell protocol (via LayerShellQt) to
+	 * anchor the panel near the system tray. This gives us:
+	 *  - Correct positioning near the tray icon (bottom-right edge)
+	 *  - Always-on-top (Overlay layer)
+	 *  - Keyboard input without popup grabbing
+	 *  - No transient-parent requirement (works on Wayland) */
+	show();  /* Create the QWindow handle first. */
 
-				if (!anchor_.isNull()) {
-					QScreen *screen =
-						QGuiApplication::screenAt(anchor_);
-					if (!screen)
-						screen = QGuiApplication::primaryScreen();
-					QRect avail = screen
-						? screen->availableGeometry()
-						: QRect(0,0,1920,1080);
+	QWindow *win = windowHandle();
+	if (win) {
+		auto *ls = LayerShellQt::Window::get(win);
+		if (ls) {
+			/* Anchor to bottom-right corner (where the tray
+			 * typically lives), opening upward. */
+			ls->setAnchors(LayerShellQt::Window::AnchorBottom |
+				       LayerShellQt::Window::AnchorRight);
+			ls->setLayer(LayerShellQt::Window::LayerOverlay);
+			ls->setKeyboardInteractivity(
+				LayerShellQt::Window::KeyboardInteractivityOnDemand);
+			ls->setScope("baresip-call-panel");
+			ls->setCloseOnDismissed(true);
 
-					marginR = avail.right() - anchor_.x();
-					if (marginR < 0)
-						marginR = 0;
+			/* Margins to offset from the screen corner so the
+			 * panel appears near the tray icon rather than
+			 * flush in the corner. Use the tray icon geometry
+			 * if available, otherwise a reasonable default. */
+			QRect iconGeo;
+			if (trayIcon_)
+				iconGeo = trayIcon_->geometry();
 
-					/* If the icon is above the available area
-					 * (top panel), anchor top and drop down.
-					 * If below (bottom panel), anchor bottom
-					 * and open upward. Otherwise use the
-					 * half-screen heuristic. */
-					if (anchor_.y() < avail.top()) {
-						anchors = LayerShellQt::Window::Anchors(
-							LayerShellQt::Window::AnchorTop |
-							LayerShellQt::Window::AnchorRight);
-						marginT = 0;
-					} else if (anchor_.y() > avail.bottom()) {
-						anchors = LayerShellQt::Window::Anchors(
-							LayerShellQt::Window::AnchorBottom |
-							LayerShellQt::Window::AnchorRight);
-						marginB = 0;
-					} else if (anchor_.y() < avail.center().y()) {
-						anchors = LayerShellQt::Window::Anchors(
-							LayerShellQt::Window::AnchorTop |
-							LayerShellQt::Window::AnchorRight);
-						marginT = anchor_.y() - avail.top();
-					} else {
-						anchors = LayerShellQt::Window::Anchors(
-							LayerShellQt::Window::AnchorBottom |
-							LayerShellQt::Window::AnchorRight);
-						marginB = avail.bottom() - anchor_.y();
-					}
-				} else {
-					/* Fallback: bottom-right. */
-					anchors = LayerShellQt::Window::Anchors(
-						LayerShellQt::Window::AnchorBottom |
-						LayerShellQt::Window::AnchorRight);
-					marginB = 0;
-				}
-
-				ls->setAnchors(anchors);
-				ls->setMargins(QMargins(0, marginT, marginR, marginB));
-				ls->setDesiredSize(size());
-				show();
-				return;
+			int marginR, marginB;
+			if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
+				/* Position the panel's right edge at the
+				 * tray icon's right edge, and the panel's
+				 * bottom edge at the tray icon's top. */
+				QScreen *screen = QGuiApplication::screenAt(
+							iconGeo.bottomRight());
+				if (!screen)
+					screen = QGuiApplication::primaryScreen();
+				QRect avail = screen ? screen->availableGeometry()
+						     : QRect(0,0,1920,1080);
+				marginR = avail.right() - iconGeo.right();
+				marginB = avail.bottom() - iconGeo.top() + 1;
+			} else {
+				/* Default: small offset from the corner. */
+				marginR = 4;
+				marginB = 40;  /* above the tray bar */
 			}
+
+			ls->setMargins(QMargins(0, 0, marginR, marginB));
+			ls->setDesiredSize(size());
+			return;
 		}
 	}
+	/* Fall through if layer shell isn't actually available at runtime. */
 #endif
 	/* Fallback: plain frameless tool window, positioned manually. */
 	positionNearTray();
