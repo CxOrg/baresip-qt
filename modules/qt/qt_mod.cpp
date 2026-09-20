@@ -569,7 +569,7 @@ static int module_init(void)
 		return err;
 
 	err = cmd_register(baresip_commands(), qt_cmdv,
-			   ARRAY_SIZE(qt_cmdv));
+			   RE_ARRAY_SIZE(qt_cmdv));
 	if (err)
 		return err;
 
