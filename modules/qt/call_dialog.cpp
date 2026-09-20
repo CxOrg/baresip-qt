@@ -19,6 +19,10 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
+#include <QWindow>
+#ifdef HAVE_LAYERSHELL
+#include <LayerShellQt/Window>
+#endif
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -75,6 +79,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	installEventFilter(this);
 	buildUi();
 	applyState();
+	setupLayerShell();
 }
 
 
@@ -93,6 +98,40 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
+	setupLayerShell();
+}
+
+
+void CallDialog::setupLayerShell()
+{
+#ifdef HAVE_LAYERSHELL
+	/* Force native window creation to get a QWindow handle, then
+	 * destroy the platform surface (xdg-shell) so LayerShellQt can
+	 * install its event filter. When show() is called later, the
+	 * filter intercepts surface creation and uses the layer-shell
+	 * protocol instead — giving us compositor-side positioning and
+	 * always-on-top (Overlay layer). */
+	setAttribute(Qt::WA_NativeWindow);
+	winId();
+
+	QWindow *win = windowHandle();
+	if (!win)
+		return;
+
+	/* Destroy the xdg-shell surface but keep the QWindow object. */
+	win->destroy();
+
+	auto *ls = LayerShellQt::Window::get(win);
+	if (!ls)
+		return;
+
+	ls->setLayer(LayerShellQt::Window::LayerOverlay);
+	ls->setKeyboardInteractivity(
+		LayerShellQt::Window::KeyboardInteractivityOnDemand);
+	ls->setScope("baresip-call-panel");
+	ls->setCloseOnDismissed(true);
+	layerShellApplied_ = true;
+#endif
 }
 
 
@@ -168,6 +207,56 @@ void CallDialog::showPanel()
 {
 	adjustSize();
 
+#ifdef HAVE_LAYERSHELL
+	if (layerShellApplied_) {
+		QWindow *win = windowHandle();
+		if (win) {
+			auto *ls = LayerShellQt::Window::get(win);
+			if (ls) {
+				/* Determine anchors and margins from the
+				 * screen geometry. Detect which edge the
+				 * panel bar is on by comparing full vs
+				 * available geometry. */
+				QScreen *screen = QGuiApplication::primaryScreen();
+				QRect full = screen ? screen->geometry()
+						    : QRect(0,0,1920,1080);
+				QRect avail = screen ? screen->availableGeometry()
+						     : QRect(0,0,1920,1080);
+
+				int marginR, marginT = 0, marginB = 0;
+				LayerShellQt::Window::Anchors anchors;
+
+				if (avail.top() > full.top()) {
+					/* Panel bar at top — drop down. */
+					anchors = LayerShellQt::Window::Anchors(
+						LayerShellQt::Window::AnchorTop |
+						LayerShellQt::Window::AnchorRight);
+					marginT = 0;
+				} else if (avail.bottom() < full.bottom()) {
+					/* Panel bar at bottom — open upward. */
+					anchors = LayerShellQt::Window::Anchors(
+						LayerShellQt::Window::AnchorBottom |
+						LayerShellQt::Window::AnchorRight);
+					marginB = 0;
+				} else {
+					/* No panel detected — bottom-right. */
+					anchors = LayerShellQt::Window::Anchors(
+						LayerShellQt::Window::AnchorBottom |
+						LayerShellQt::Window::AnchorRight);
+					marginB = 40;
+				}
+
+				marginR = 4;
+
+				ls->setAnchors(anchors);
+				ls->setMargins(QMargins(0, marginT, marginR, marginB));
+				ls->setDesiredSize(size());
+				show();
+				return;
+			}
+		}
+	}
+#endif
 	/* Fallback: plain frameless tool window, positioned manually. */
 	positionNearTray();
 	show();

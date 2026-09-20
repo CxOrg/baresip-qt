@@ -93,12 +93,14 @@ private:
 	void buildUi();
 	void applyState();
 	void positionNearTray();
+	void setupLayerShell();
 
 	State state_;
 	quintptr callPtr_ = 0;
 	QString peerName_;
 	bool isOutgoing_ = false;  /**< direction for InCall label */
 	QSystemTrayIcon *trayIcon_ = nullptr;
+	bool layerShellApplied_ = false;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
