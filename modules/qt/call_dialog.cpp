@@ -81,7 +81,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * layer carries the themed background, border and radius. */
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid #2a2e33;"
+		"         border: 2px solid palette(dark);"
 		"         border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -105,7 +105,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid #2a2e33;"
+		"         border: 2px solid palette(dark);"
 		"         border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
