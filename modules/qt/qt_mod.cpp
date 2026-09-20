@@ -22,6 +22,9 @@
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
+#ifdef HAVE_LAYERSHELL
+#include <LayerShellQt/Window>
+#endif
 #ifdef HAVE_KSTYLE
 #include <kstylemanager.h>
 #endif
@@ -123,7 +126,7 @@ static int queryTrayPanelHeight(QScreen *screen)
 }
 
 
-QMargins qtPanelMargins(const QPoint &anchorPos)
+QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft)
 {
 	/* Screen containing the anchor point (tray icon position),
 	 * else the primary screen. */
@@ -136,13 +139,43 @@ QMargins qtPanelMargins(const QPoint &anchorPos)
 	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
 	QRect avail = screen ? screen->availableGeometry() : full;
 
-	/* Top margin = tray-panel height + 8px gap. The geometry
+	/* Top margin = tray-panel height + 16px gap. The geometry
 	 * strut covers reserve-space panels; the D-Bus query covers
 	 * dodge/autohide panels which leave no strut. */
 	int top = qMax(avail.top() - full.top(),
-		       queryTrayPanelHeight(screen)) + 8;
+		       queryTrayPanelHeight(screen)) + 16;
 
-	return QMargins(0, top, 8, 0);
+	/* Anchor to the screen edge on the tray icon's half of the
+	 * screen: left half anchors left, otherwise right. */
+	bool left = !anchorPos.isNull() &&
+		anchorPos.x() < full.center().x();
+	if (anchorLeft)
+		*anchorLeft = left;
+
+	return left ? QMargins(8, top, 0, 0) : QMargins(0, top, 8, 0);
+}
+
+
+void qtPanelApplyAnchors(QWindow *win, const QPoint &anchorPos)
+{
+#ifdef HAVE_LAYERSHELL
+	if (!win)
+		return;
+	auto *ls = LayerShellQt::Window::get(win);
+	if (!ls)
+		return;
+
+	bool left = false;
+	QMargins m = qtPanelMargins(anchorPos, &left);
+	ls->setAnchors(LayerShellQt::Window::Anchors(
+		LayerShellQt::Window::AnchorTop |
+		(left ? LayerShellQt::Window::AnchorLeft
+		      : LayerShellQt::Window::AnchorRight)));
+	ls->setMargins(m);
+#else
+	Q_UNUSED(win);
+	Q_UNUSED(anchorPos);
+#endif
 }
 
 

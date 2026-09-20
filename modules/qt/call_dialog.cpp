@@ -259,13 +259,9 @@ void CallDialog::showPanel()
 		if (win) {
 			auto *ls = LayerShellQt::Window::get(win);
 			if (ls) {
-				/* Anchored top-right; margins from the
-				 * tray-icon click position so the panel
-				 * edges up against the icon like a menu. */
-				ls->setAnchors(LayerShellQt::Window::Anchors(
-					LayerShellQt::Window::AnchorTop |
-					LayerShellQt::Window::AnchorRight));
-				ls->setMargins(qtPanelMargins(anchorPos_));
+				/* Top + nearest horizontal edge, margins
+				 * from the tray-panel height. */
+				qtPanelApplyAnchors(win, anchorPos_);
 				ls->setDesiredSize(size());
 				show();
 				return;

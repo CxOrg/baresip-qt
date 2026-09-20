@@ -96,5 +96,13 @@ QString accountLabel(struct ua *ua);
 
 /** Layer-shell margins for the popup panels. `anchorPos` (e.g. the
  *  tray-icon click position) selects the screen; the top margin is
- *  the tray panel's height + 8px, right margin is fixed 8px. */
-QMargins qtPanelMargins(const QPoint &anchorPos);
+ *  the tray panel's height + 16px. When the anchor is on the left
+ *  half of its screen the panel anchors to the left edge (margin
+ *  8px) instead of the right; `anchorLeft` reports the choice. */
+QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft);
+
+class QWindow;
+/** Apply top + nearest-horizontal-edge anchors and the computed
+ *  margins to a layer-shell window. No-op without HAVE_LAYERSHELL
+ *  or when the window has no layer-shell surface. */
+void qtPanelApplyAnchors(QWindow *win, const QPoint &anchorPos);

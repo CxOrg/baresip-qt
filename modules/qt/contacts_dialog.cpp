@@ -165,10 +165,7 @@ void ContactsDialog::setupLayerShell()
 	ls->setKeyboardInteractivity(
 		LayerShellQt::Window::KeyboardInteractivityOnDemand);
 	ls->setScope("baresip-contacts");
-	ls->setAnchors(LayerShellQt::Window::Anchors(
-		LayerShellQt::Window::AnchorTop |
-		LayerShellQt::Window::AnchorRight));
-	ls->setMargins(qtPanelMargins(anchorPos_));
+	qtPanelApplyAnchors(win, anchorPos_);
 	ls->setDesiredSize(size());
 #endif
 }
@@ -177,12 +174,7 @@ void ContactsDialog::setupLayerShell()
 void ContactsDialog::setAnchorPoint(const QPoint &pos)
 {
 	anchorPos_ = pos;
-#ifdef HAVE_LAYERSHELL
-	QWindow *win = windowHandle();
-	auto *ls = win ? LayerShellQt::Window::get(win) : nullptr;
-	if (ls)
-		ls->setMargins(qtPanelMargins(anchorPos_));
-#endif
+	qtPanelApplyAnchors(windowHandle(), anchorPos_);
 }
 
 
