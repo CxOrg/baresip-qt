@@ -67,8 +67,10 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	/* Frameless tool window that works on Wayland (unlike Qt::Popup,
 	 * which needs a transient parent). Closes on click-outside via
-	 * an event filter. Inherits the system/Plasma Qt style. */
-	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+	 * an event filter. Inherits the system/Plasma Qt style.
+	 * WindowStaysOnTopHint keeps it above other application windows. */
+	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
+		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -85,7 +87,8 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	  trayIcon_(trayIcon)
 {
 	setAttribute(Qt::WA_DeleteOnClose, false);
-	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
+		       Qt::WindowStaysOnTopHint);
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
@@ -95,9 +98,12 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 
 void CallDialog::positionNearTray()
 {
-	/* With LayerShellQt, positioning is handled by the compositor
-	 * via anchors and margins -- see showPanel(). This method is
-	 * only used as a fallback for non-layer-shell environments. */
+	/* On Wayland, QSystemTrayIcon::geometry() is typically empty,
+	 * so we infer the tray position from the screen's available
+	 * geometry: the gap between the full screen geometry and the
+	 * available geometry tells us where the panel bar is (top or
+	 * bottom). We then position the popup just inside the available
+	 * area, near the right edge (where tray icons usually live). */
 	QRect iconGeo;
 	if (trayIcon_)
 		iconGeo = trayIcon_->geometry();
@@ -106,15 +112,44 @@ void CallDialog::positionNearTray()
 	if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
 		pos = iconGeo.bottomLeft();
 	} else {
-		pos = QCursor::pos();
+		/* No tray geometry — infer from screen layout. */
+		QScreen *screen = QGuiApplication::primaryScreen();
+		if (!screen) {
+			pos = QCursor::pos();
+			screen = QGuiApplication::screenAt(pos);
+		}
+		if (!screen)
+			screen = QGuiApplication::primaryScreen();
+		if (!screen)
+			return;
+
+		QRect full = screen->geometry();
+		QRect avail = screen->availableGeometry();
+
+		/* Default to right edge. */
+		int x = avail.right() - 20;
+
+		/* If there's a gap at the top of the screen, the panel
+		 * bar is at the top — drop the popup down from there. */
+		if (avail.top() > full.top()) {
+			pos = QPoint(x, avail.top());
+		}
+		/* If there's a gap at the bottom, panel is at the
+		 * bottom — open the popup upward from above. */
+		else if (avail.bottom() < full.bottom()) {
+			pos = QPoint(x, avail.bottom());
+		}
+		else {
+			pos = QCursor::pos();
+		}
 	}
 
 	QSize sz = sizeHint();
-	QScreen *screen = QGuiApplication::screenAt(pos);
-	if (!screen)
-		screen = QGuiApplication::primaryScreen();
-	QRect avail = screen ? screen->availableGeometry()
-			     : QRect(0, 0, 1920, 1080);
+	QScreen *scr = QGuiApplication::screenAt(pos);
+	if (!scr)
+		scr = QGuiApplication::primaryScreen();
+	QRect avail = scr ? scr->availableGeometry()
+			  : QRect(0, 0, 1920, 1080);
 
 	int x = pos.x();
 	int y = pos.y() - sz.height();
