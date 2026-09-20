@@ -289,12 +289,10 @@ void CallDialog::buildUi()
 	historyList_->setMaximumHeight(200);
 	historyList_->setMinimumHeight(60);
 	historyList_->setUniformItemSizes(true);
-	/* Disable horizontal scrollbar — let the dialog resize to fit
-	 * the widest entry instead of clipping it. */
+	/* Disable horizontal scrollbar — the dialog widens to fit the
+	 * widest entry instead (see refreshHistory/adjustSize). */
 	historyList_->setHorizontalScrollBarPolicy(
 		Qt::ScrollBarAlwaysOff);
-	/* Wrap text if an entry is too long, instead of clipping. */
-	historyList_->setWordWrap(true);
 	historyList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	layout->addWidget(historyList_);
 	connect(historyList_, &QListWidget::itemClicked,
@@ -316,10 +314,9 @@ void CallDialog::buildUi()
 	connect(redBtn_, &QPushButton::clicked,
 		this, &CallDialog::onRed);
 
-	/* Use a reasonable initial size; adjustSize() in showPanel()
-	 * will adapt it to the actual content. */
+	/* Use a reasonable initial size; refreshHistory/adjustSize
+	 * will widen the dialog to fit the longest history entry. */
 	resize(340, 320);
-	layout->setSizeConstraint(QLayout::SetFixedSize);
 }
 
 
@@ -522,6 +519,26 @@ void CallDialog::refreshHistory()
 		item->setData(Qt::UserRole, e.uri);
 		historyList_->addItem(item);
 	}
+
+	/* Widen the dialog to fit the longest history entry without
+	 * text wrap. Measure the text width with the list's font. */
+	int maxWidth = 0;
+	QFontMetrics fm(historyList_->font());
+	for (int i = 0; i < historyList_->count(); ++i) {
+		QListWidgetItem *it = historyList_->item(i);
+		int iconWidth = it->icon().isNull() ? 0 : 24;
+		maxWidth = std::max(maxWidth,
+			fm.horizontalAdvance(it->text()) + iconWidth + 20);
+	}
+
+	/* Add space for the vertical scrollbar. */
+	maxWidth += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+
+	/* Don't shrink below the initial width (buttons + label). */
+	if (maxWidth < 340)
+		maxWidth = 340;
+
+	resize(maxWidth, height());
 }
 
 
