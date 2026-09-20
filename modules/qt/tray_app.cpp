@@ -5,6 +5,7 @@
 #include "call_dialog.h"
 #include "call_history.h"
 #include "settings_dialog.h"
+#include "contacts_dialog.h"
 #include "dialpad_dialog.h"
 
 #include <QMessageBox>
@@ -108,6 +109,11 @@ void TrayApp::buildMenu()
 	/* Dial contact */
 	contactsMenu_ = menu_->addMenu("Dial contact");
 	populateContacts();
+
+	/* Contacts editor */
+	QAction *contactsAct = menu_->addAction("Contacts...");
+	connect(contactsAct, &QAction::triggered,
+		this, &TrayApp::onContacts);
 
 	/* Call history */
 	historyMenu_ = menu_->addMenu("Call history");
@@ -284,6 +290,26 @@ void TrayApp::onSettings()
 	settingsDialog_->show();
 	settingsDialog_->raise();
 	settingsDialog_->activateWindow();
+}
+
+
+void TrayApp::onContacts()
+{
+	if (!contactsDialog_) {
+		contactsDialog_ = new ContactsDialog();
+		/* After the contacts file is rewritten, repopulate the
+		 * Dial-contact submenu from the re-synced list. */
+		connect(contactsDialog_, &ContactsDialog::contactsSaved,
+			this, [this]() {
+			contactsMenu_->clear();
+			populateContacts();
+			refreshTrayMenu();
+		});
+	}
+
+	contactsDialog_->show();
+	contactsDialog_->raise();
+	contactsDialog_->activateWindow();
 }
 
 

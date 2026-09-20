@@ -9,6 +9,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <mutex>
 
 extern "C" {
@@ -50,6 +51,7 @@ enum qt_mod_events {
 	MQ_UNREGISTER,
 	MQ_UA_ALLOC,
 	MQ_UA_FREE,
+	MQ_SYNC_CONTACTS,
 };
 
 struct qt_mod {
@@ -77,6 +79,7 @@ void qt_mod_register(struct ua *ua);
 void qt_mod_unregister(struct ua *ua);
 void qt_mod_ua_alloc(const QString &line);
 void qt_mod_ua_free(struct ua *ua);
+void qt_mod_sync_contacts(const QStringList &lines);
 void qt_mod_send_digit(struct call *call, char key);
 void qt_mod_quit(void);
 

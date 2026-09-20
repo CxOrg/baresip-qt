@@ -42,7 +42,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SRCS qt_mod.cpp tray_app.cpp dial_dialog.cpp call_dialog.cpp call_history.cpp settings_dialog.cpp dialpad_dialog.cpp)
+set(SRCS qt_mod.cpp tray_app.cpp dial_dialog.cpp call_dialog.cpp call_history.cpp settings_dialog.cpp dialpad_dialog.cpp contacts_dialog.cpp)
 
 if(STATIC)
     add_library(${PROJECT_NAME} OBJECT ${SRCS})

@@ -331,6 +331,32 @@ static void mqueue_handler(int id, void *data, void *arg)
 		mem_deref(ua);
 		break;
 	}
+
+	case MQ_SYNC_CONTACTS: {
+		/* Rebuild the in-memory contact list to match the
+		 * contacts file just written by the contacts panel. */
+		QStringList *lines = static_cast<QStringList *>(data);
+		struct contacts *cs = baresip_contacts();
+		if (cs) {
+			struct list *lst = contact_list(cs);
+			struct le *le = list_head(lst);
+			while (le) {
+				struct le *next = le->next;
+				contact_remove(cs,
+					static_cast<struct contact *>(le->data));
+				le = next;
+			}
+			for (const QString &l : *lines) {
+				QByteArray utf8 = l.toUtf8();
+				struct pl pl;
+				pl.p = utf8.constData();
+				pl.l = (size_t)utf8.size();
+				(void)contact_add(cs, NULL, &pl);
+			}
+		}
+		delete lines;
+		break;
+	}
 	}
 }
 
@@ -397,6 +423,13 @@ void qt_mod_ua_alloc(const QString &line)
 void qt_mod_ua_free(struct ua *ua)
 {
 	mqueue_push(qt_mod_obj.mq, MQ_UA_FREE, ua);
+}
+
+
+void qt_mod_sync_contacts(const QStringList &lines)
+{
+	mqueue_push(qt_mod_obj.mq, MQ_SYNC_CONTACTS,
+		    new QStringList(lines));
 }
 
 
