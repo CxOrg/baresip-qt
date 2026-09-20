@@ -20,7 +20,12 @@
 #include <QTextStream>
 #include <QDir>
 #include <QStandardPaths>
+#include <QWindow>
 #include <functional>
+
+#ifdef HAVE_LAYERSHELL
+#include <LayerShellQt/Window>
+#endif
 
 #include <re.h>
 #include <baresip.h>
@@ -276,6 +281,40 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 	buildUi();
 	loadSettings();
 	resize(420, 480);
+	setupLayerShell();
+}
+
+
+void SettingsDialog::setupLayerShell()
+{
+#ifdef HAVE_LAYERSHELL
+	/* Same pattern as CallDialog: create a native handle, destroy
+	 * the xdg-shell surface so LayerShellQt can intercept surface
+	 * creation at show(), then anchor top-right on the Overlay
+	 * layer — the same screen location as the call panel. */
+	setAttribute(Qt::WA_NativeWindow);
+	winId();
+
+	QWindow *win = windowHandle();
+	if (!win)
+		return;
+
+	win->destroy();
+
+	auto *ls = LayerShellQt::Window::get(win);
+	if (!ls)
+		return;
+
+	ls->setLayer(LayerShellQt::Window::LayerOverlay);
+	ls->setKeyboardInteractivity(
+		LayerShellQt::Window::KeyboardInteractivityOnDemand);
+	ls->setScope("baresip-settings");
+	ls->setAnchors(LayerShellQt::Window::Anchors(
+		LayerShellQt::Window::AnchorTop |
+		LayerShellQt::Window::AnchorRight));
+	ls->setMargins(QMargins(0, 58, 8, 0));
+	ls->setDesiredSize(size());
+#endif
 }
 
 

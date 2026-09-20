@@ -59,6 +59,7 @@ private:
 	};
 
 	void buildUi();
+	void setupLayerShell();
 	QWidget *buildAccountPage(AccountWidgets &w, QTabWidget *tabs);
 	void loadSettings();
 	void loadAccount(AccountWidgets &w, int index);
