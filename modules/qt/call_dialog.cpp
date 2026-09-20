@@ -75,13 +75,12 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	/* Rounded corners via translucent background + stylesheet.
-	 * WA_TranslucentBackground lets the rounded corners show
-	 * through; the stylesheet rounds the top-level widget. */
-	setAttribute(Qt::WA_TranslucentBackground);
+	/* Let the active Qt widget style (Qt6Curve) style the panel
+	 * like a menu — it provides the dark themed background
+	 * automatically. No WA_TranslucentBackground (causes black
+	 * on Wayland/LayerShellQt). */
 	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"           border-radius: 12px; }");
+		"QDialog { border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -101,10 +100,8 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"           border-radius: 12px; }");
+		"QDialog { border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
