@@ -94,6 +94,35 @@ inline const QDBusArgument &operator>>(const QDBusArgument &arg, DBusMenuLayoutI
 }
 
 
+/* ---- SNI IconPixmap type (a(iiay)) ------------------------------- */
+
+struct IconPixmap {
+	int width = 0;
+	int height = 0;
+	QByteArray data;  /* ARGB32, network byte order, row-major */
+};
+Q_DECLARE_METATYPE(IconPixmap)
+
+inline QDBusArgument &operator<<(QDBusArgument &arg, const IconPixmap &pix)
+{
+	arg.beginStructure();
+	arg << pix.width << pix.height << pix.data;
+	arg.endStructure();
+	return arg;
+}
+
+inline const QDBusArgument &operator>>(const QDBusArgument &arg, IconPixmap &pix)
+{
+	arg.beginStructure();
+	arg >> pix.width >> pix.height >> pix.data;
+	arg.endStructure();
+	return arg;
+}
+
+typedef QList<IconPixmap> IconPixmapList;
+Q_DECLARE_METATYPE(IconPixmapList)
+
+
 /* ---- DBusMenu server -------------------------------------------- */
 
 class DBusMenu : public QObject {
@@ -168,10 +197,13 @@ class StatusNotifierItem : public QObject {
 	Q_PROPERTY(QString Category READ category CONSTANT)
 	Q_PROPERTY(QString IconName READ iconName NOTIFY iconChanged)
 	Q_PROPERTY(QString IconThemePath READ iconThemePath CONSTANT)
+	Q_PROPERTY(IconPixmapList IconPixmap READ iconPixmap NOTIFY iconChanged)
 	Q_PROPERTY(QString AttentionIconName READ attentionIconName NOTIFY iconChanged)
+	Q_PROPERTY(IconPixmapList AttentionIconPixmap READ attentionIconPixmap NOTIFY iconChanged)
 	Q_PROPERTY(QString IconAccessibleDesc READ iconAccessibleDesc CONSTANT)
 	Q_PROPERTY(QString AttentionAccessibleDesc READ attentionAccessibleDesc CONSTANT)
 	Q_PROPERTY(QDBusObjectPath Menu READ menuPath CONSTANT)
+	Q_PROPERTY(QString ToolTip READ toolTipString NOTIFY titleChanged)
 
 public:
 	explicit StatusNotifierItem(QObject *parent = nullptr);
@@ -196,10 +228,13 @@ public:
 	QString category() const { return "Communications"; }
 	QString iconName() const { return m_iconName; }
 	QString iconThemePath() const { return {}; }
+	IconPixmapList iconPixmap() const;
+	IconPixmapList attentionIconPixmap() const { return {}; }
 	QString attentionIconName() const { return m_attentionIconName; }
 	QString iconAccessibleDesc() const { return "baresip"; }
 	QString attentionAccessibleDesc() const { return "baresip attention"; }
 	QDBusObjectPath menuPath() const { return QDBusObjectPath("/MenuBar"); }
+	QString toolTipString() const { return m_title; }
 
 signals:
 	/* Emitted when Plasma calls Activate(x, y) -- left-click.

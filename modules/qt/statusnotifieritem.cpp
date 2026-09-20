@@ -15,6 +15,8 @@
 #include <QScreen>
 #include <QTemporaryFile>
 #include <QDir>
+#include <QPainter>
+#include <QImage>
 #include <QDebug>
 
 /* Register the custom DBusMenu types with the D-Bus marshalling system. */
@@ -31,6 +33,8 @@ static void registerMetaTypes()
 	qDBusRegisterMetaType<QList<DBusMenuItem>>();
 	qDBusRegisterMetaType<QList<DBusMenuItemKeys>>();
 	qDBusRegisterMetaType<QList<DBusMenuLayoutItem>>();
+	qDBusRegisterMetaType<IconPixmap>();
+	qDBusRegisterMetaType<IconPixmapList>();
 }
 
 
@@ -378,6 +382,45 @@ void StatusNotifierItem::setIconName(const QString &name)
 	m_icon = QIcon::fromTheme(name);
 	emit iconChanged();
 	emit NewIcon();
+}
+
+
+IconPixmapList StatusNotifierItem::iconPixmap() const
+{
+	IconPixmapList list;
+	if (m_icon.isNull())
+		return list;
+
+	/* Render at a typical tray icon size (22x22 or 24x24). */
+	const int sz = 22;
+	QPixmap pm = m_icon.pixmap(sz, sz);
+	if (pm.isNull())
+		return list;
+
+	/* Convert to ARGB32 (premultiplied) in network byte order. */
+	QImage img = pm.toImage().convertToFormat(
+		QImage::Format_ARGB32_Premultiplied);
+
+	IconPixmap pix;
+	pix.width = img.width();
+	pix.height = img.height();
+
+	/* SNI spec: data is ARGB32 in network byte order (big-endian),
+	 * i.e. A,R,G,B per pixel, row-major.
+	 * QImage::Format_ARGB32_Premultiplied on little-endian (x86)
+	 * stores bytes as B,G,R,A in memory. Swap to get A,R,G,B. */
+	const int bytes = img.sizeInBytes();
+	pix.data.resize(bytes);
+	const uchar *src = img.constBits();
+	uchar *dst = reinterpret_cast<uchar *>(pix.data.data());
+	for (int i = 0; i < bytes; i += 4) {
+		dst[i]     = src[i + 3];  /* A */
+		dst[i + 1] = src[i + 2];  /* R */
+		dst[i + 2] = src[i + 1];  /* G */
+		dst[i + 3] = src[i];      /* B */
+	}
+	list.append(pix);
+	return list;
 }
 
 
