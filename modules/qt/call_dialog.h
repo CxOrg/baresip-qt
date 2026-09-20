@@ -67,9 +67,6 @@ public:
 	/** Show the panel positioned near the tray icon. */
 	void showPanel();
 
-	/** Paint the rounded-corner background. */
-	void paintEvent(QPaintEvent *event) override;
-
 	/** Close the panel if the user clicked outside it (popup-like
 	 *  behavior without Qt::Popup, which doesn't work on Wayland
 	 *  without a transient parent). */

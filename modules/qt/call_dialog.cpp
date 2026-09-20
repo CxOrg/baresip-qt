@@ -77,13 +77,13 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	/* Rounded corners via translucent background + manual paintEvent.
-	 * WA_TranslucentBackground makes the window transparent; paintEvent
-	 * fills a rounded rect with #13161b. Child widgets need transparent
-	 * backgrounds so our painted background shows through. */
-	setAttribute(Qt::WA_TranslucentBackground);
+	/* Rounded corners: WA_TranslucentBackground may not work with
+	 * LayerShellQt on Wayland (compositor fills black). Instead, use
+	 * a solid background and paint rounded corners with the system
+	 * background colour outside the rounded rect. */
+	setAttribute(Qt::WA_NoSystemBackground);
 	setStyleSheet(
-		"QDialog { background: transparent; }"
+		"QDialog { background: #13161b; border-radius: 12px; }"
 		"QLabel { background: transparent; color: #e0e0e0; }"
 		"QLineEdit { background-color: rgba(255,255,255,0.08);"
 		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
@@ -110,9 +110,9 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	setAttribute(Qt::WA_TranslucentBackground);
+	setAttribute(Qt::WA_NoSystemBackground);
 	setStyleSheet(
-		"QDialog { background: transparent; }"
+		"QDialog { background: #13161b; border-radius: 12px; }"
 		"QLabel { background: transparent; color: #e0e0e0; }"
 		"QLineEdit { background-color: rgba(255,255,255,0.08);"
 		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
@@ -151,7 +151,7 @@ void CallDialog::setupLayerShell()
 	if (!ls)
 		return;
 
-	ls->setLayer(LayerShellQt::Window::LayerOverlay);
+	ls->setLayer(LayerShellQt::Window::LayerTop);
 	ls->setKeyboardInteractivity(
 		LayerShellQt::Window::KeyboardInteractivityOnDemand);
 	ls->setScope("baresip-call-panel");
@@ -322,29 +322,6 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		}
 	}
 	return QDialog::eventFilter(obj, event);
-}
-
-
-void CallDialog::paintEvent(QPaintEvent *event)
-{
-	/* With WA_TranslucentBackground, the window is transparent.
-	 * Paint a rounded-rectangle background in the panel colour so
-	 * the popup has a solid #13161b background with 12px rounded
-	 * corners. This is done in paintEvent (not stylesheet) because
-	 * the active Qt widget style (Qt6Curve) may override stylesheet
-	 * background-color. */
-	QPainter p(this);
-	p.setRenderHint(QPainter::Antialiasing);
-	p.setPen(Qt::NoPen);
-
-	QPainterPath path;
-	path.addRoundedRect(rect(), 12, 12);
-	p.fillPath(path, QColor("#13161b"));
-
-	/* Don't call QDialog::paintEvent — it would paint the default
-	 * widget background (black under WA_TranslucentBackground) over
-	 * our coloured one. Child widgets paint themselves separately. */
-	Q_UNUSED(event)
 }
 
 
