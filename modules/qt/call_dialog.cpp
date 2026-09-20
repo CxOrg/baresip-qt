@@ -76,11 +76,11 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
-	/* Let the active Qt widget style (Qt6Curve) style the panel
-	 * like a menu — it provides the dark themed background
-	 * automatically. */
+	/* Semi-transparent #13161b background (50% opacity) with
+	 * rounded corners — alpha blends over the Plasma panel. */
 	setStyleSheet(
-		"QDialog { border-radius: 8px; }");
+		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"          border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -102,7 +102,8 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { border-radius: 8px; }");
+		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"          border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
