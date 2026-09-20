@@ -265,8 +265,7 @@ void CallDialog::showPanel()
 				ls->setAnchors(LayerShellQt::Window::Anchors(
 					LayerShellQt::Window::AnchorTop |
 					LayerShellQt::Window::AnchorRight));
-				ls->setMargins(qtPanelMargins(anchorPos_,
-							    size()));
+				ls->setMargins(qtPanelMargins(anchorPos_));
 				ls->setDesiredSize(size());
 				show();
 				return;

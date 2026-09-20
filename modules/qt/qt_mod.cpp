@@ -123,7 +123,7 @@ static int queryTrayPanelHeight(QScreen *screen)
 }
 
 
-QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize)
+QMargins qtPanelMargins(const QPoint &anchorPos)
 {
 	/* Screen containing the anchor point (tray icon position),
 	 * else the primary screen. */
@@ -142,17 +142,7 @@ QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize)
 	int top = qMax(avail.top() - full.top(),
 		       queryTrayPanelHeight(screen)) + 8;
 
-	/* Right margin: place the panel's right edge at the click x,
-	 * like a menu growing leftward from the tray icon. Clamped so
-	 * the panel can't leave the screen on either side. */
-	int right = 8;
-	if (!anchorPos.isNull() && full.contains(anchorPos)) {
-		right = qMax(0, full.right() - anchorPos.x() + 1);
-		int maxRight = full.width() - panelSize.width();
-		right = qMin(right, qMax(0, maxRight));
-	}
-
-	return QMargins(0, top, right, 0);
+	return QMargins(0, top, 8, 0);
 }
 
 

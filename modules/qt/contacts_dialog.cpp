@@ -168,7 +168,7 @@ void ContactsDialog::setupLayerShell()
 	ls->setAnchors(LayerShellQt::Window::Anchors(
 		LayerShellQt::Window::AnchorTop |
 		LayerShellQt::Window::AnchorRight));
-	ls->setMargins(qtPanelMargins(anchorPos_, size()));
+	ls->setMargins(qtPanelMargins(anchorPos_));
 	ls->setDesiredSize(size());
 #endif
 }
@@ -181,7 +181,7 @@ void ContactsDialog::setAnchorPoint(const QPoint &pos)
 	QWindow *win = windowHandle();
 	auto *ls = win ? LayerShellQt::Window::get(win) : nullptr;
 	if (ls)
-		ls->setMargins(qtPanelMargins(anchorPos_, size()));
+		ls->setMargins(qtPanelMargins(anchorPos_));
 #endif
 }
 

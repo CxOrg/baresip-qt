@@ -94,8 +94,7 @@ QString uriToNumber(const char *uri);
 /** Account menu label: "<display name>  sip:<user>". */
 QString accountLabel(struct ua *ua);
 
-/** Layer-shell margins for the popup panels. If `anchorPos` is a
- *  valid screen point (e.g. the tray-icon click position) the
- *  panel's right edge lands on it, like a menu extending from the
- *  icon; the top margin is the real top-panel height + 8px. */
-QMargins qtPanelMargins(const QPoint &anchorPos, const QSize &panelSize);
+/** Layer-shell margins for the popup panels. `anchorPos` (e.g. the
+ *  tray-icon click position) selects the screen; the top margin is
+ *  the tray panel's height + 8px, right margin is fixed 8px. */
+QMargins qtPanelMargins(const QPoint &anchorPos);
