@@ -77,10 +77,20 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	/* Rounded corners via translucent background + stylesheet.
-	 * WA_TranslucentBackground lets the rounded corners show
-	 * through; the stylesheet rounds the top-level widget. */
+	/* Rounded corners via translucent background + manual paintEvent.
+	 * WA_TranslucentBackground makes the window transparent; paintEvent
+	 * fills a rounded rect with #13161b. Child widgets need transparent
+	 * backgrounds so our painted background shows through. */
 	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
+		"QDialog { background: transparent; }"
+		"QLabel { background: transparent; color: #e0e0e0; }"
+		"QLineEdit { background-color: rgba(255,255,255,0.08);"
+		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
+		"            border-radius: 4px; }"
+		"QListWidget { background-color: rgba(255,255,255,0.04);"
+		"              color: #e0e0e0; border: none; }"
+		"QPushButton { color: #e0e0e0; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -101,6 +111,15 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
+		"QDialog { background: transparent; }"
+		"QLabel { background: transparent; color: #e0e0e0; }"
+		"QLineEdit { background-color: rgba(255,255,255,0.08);"
+		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
+		"            border-radius: 4px; }"
+		"QListWidget { background-color: rgba(255,255,255,0.04);"
+		"              color: #e0e0e0; border: none; }"
+		"QPushButton { color: #e0e0e0; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
@@ -270,9 +289,9 @@ void CallDialog::showPanel()
 				anchors = LayerShellQt::Window::Anchors(
 					LayerShellQt::Window::AnchorTop |
 					LayerShellQt::Window::AnchorRight);
-				marginT = 60;
+				marginT = 58;
 
-				marginR = 12;
+				marginR = 10;
 
 				ls->setAnchors(anchors);
 				ls->setMargins(QMargins(0, marginT, marginR, marginB));
@@ -317,14 +336,15 @@ void CallDialog::paintEvent(QPaintEvent *event)
 	QPainter p(this);
 	p.setRenderHint(QPainter::Antialiasing);
 	p.setPen(Qt::NoPen);
-	p.setBrush(QColor("#13161b"));
 
 	QPainterPath path;
 	path.addRoundedRect(rect(), 12, 12);
 	p.fillPath(path, QColor("#13161b"));
 
-	/* Let QDialog paint its children on top of our background. */
-	QDialog::paintEvent(event);
+	/* Don't call QDialog::paintEvent — it would paint the default
+	 * widget background (black under WA_TranslucentBackground) over
+	 * our coloured one. Child widgets paint themselves separately. */
+	Q_UNUSED(event)
 }
 
 
