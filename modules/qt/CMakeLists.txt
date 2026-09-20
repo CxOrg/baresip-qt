@@ -1,15 +1,15 @@
 project(qt CXX)
 
 # Prefer Qt6 (KDE Plasma 6 / current distros), fall back to Qt5.
-find_package(Qt6 QUIET COMPONENTS Widgets)
+find_package(Qt6 QUIET COMPONENTS Widgets DBus)
 if(Qt6Widgets_FOUND)
   set(QT_VERSION_MAJOR 6)
-  set(QT_LIBRARIES Qt6::Widgets)
+  set(QT_LIBRARIES Qt6::Widgets Qt6::DBus)
 else()
-  find_package(Qt5 QUIET COMPONENTS Widgets)
+  find_package(Qt5 QUIET COMPONENTS Widgets DBus)
   if(Qt5Widgets_FOUND)
     set(QT_VERSION_MAJOR 5)
-    set(QT_LIBRARIES Qt5::Widgets)
+    set(QT_LIBRARIES Qt5::Widgets Qt5::DBus)
   endif()
 endif()
 
@@ -32,7 +32,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SRCS qt_mod.cpp tray_app.cpp dial_dialog.cpp call_dialog.cpp call_history.cpp settings_dialog.cpp dialpad_dialog.cpp)
+set(SRCS qt_mod.cpp tray_app.cpp dial_dialog.cpp call_dialog.cpp call_history.cpp settings_dialog.cpp dialpad_dialog.cpp statusnotifieritem.cpp)
 
 if(STATIC)
     add_library(${PROJECT_NAME} OBJECT ${SRCS})

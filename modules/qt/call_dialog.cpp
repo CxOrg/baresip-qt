@@ -14,7 +14,6 @@
 #include <QListWidgetItem>
 #include <QPalette>
 #include <QIcon>
-#include <QSystemTrayIcon>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QApplication>
@@ -64,8 +63,8 @@ static QPushButton *makeButton(const QString &text,
 
 /* ---- CallDialog --------------------------------------------------- */
 
-CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
-	: QDialog(parent), state_(State::Dialing), trayIcon_(trayIcon)
+CallDialog::CallDialog(QPoint anchor, QWidget *parent)
+	: QDialog(parent), state_(State::Dialing), anchor_(anchor)
 {
 	setWindowTitle("Dial");
 	setAttribute(Qt::WA_DeleteOnClose, false);
@@ -83,11 +82,11 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 
 CallDialog::CallDialog(State state, quintptr callPtr,
 		       const QString &peerUri, const QString &peerName,
-		       QSystemTrayIcon *trayIcon, QWidget *parent)
+		       QPoint anchor, QWidget *parent)
 	: QDialog(parent), state_(state), callPtr_(callPtr),
 	  peerName_(peerName), isOutgoing_(state == State::InCall &&
 					  peerName.isEmpty()),
-	  trayIcon_(trayIcon)
+	  anchor_(anchor)
 {
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
@@ -104,16 +103,9 @@ void CallDialog::positionNearTray()
 	/* With LayerShellQt, positioning is handled by the compositor
 	 * via anchors and margins -- see showPanel(). This method is
 	 * only used as a fallback for non-layer-shell environments. */
-	QRect iconGeo;
-	if (trayIcon_)
-		iconGeo = trayIcon_->geometry();
-
-	QPoint pos;
-	if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
-		pos = iconGeo.bottomLeft();
-	} else {
+	QPoint pos = anchor_;
+	if (pos.isNull())
 		pos = QCursor::pos();
-	}
 
 	QSize sz = sizeHint();
 	QScreen *screen = QGuiApplication::screenAt(pos);
@@ -183,21 +175,23 @@ void CallDialog::showPanel()
 		if (win) {
 			auto *ls = LayerShellQt::Window::get(win);
 			if (ls) {
-				/* Update margins based on tray icon position. */
-				QRect iconGeo;
-				if (trayIcon_)
-					iconGeo = trayIcon_->geometry();
-
+				/* Calculate margins from the tray icon's
+				 * screen position (passed in from
+				 * StatusNotifierItem::Activate). The panel
+				 * is anchored bottom-right, so margins
+				 * are measured from the right and bottom
+				 * screen edges. */
 				int marginR, marginB;
-				if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
-					QScreen *screen = QGuiApplication::screenAt(
-								iconGeo.bottomRight());
+				if (!anchor_.isNull()) {
+					QScreen *screen =
+						QGuiApplication::screenAt(anchor_);
 					if (!screen)
 						screen = QGuiApplication::primaryScreen();
-					QRect avail = screen ? screen->availableGeometry()
-							     : QRect(0,0,1920,1080);
-					marginR = avail.right() - iconGeo.right();
-					marginB = avail.bottom() - iconGeo.top() + 1;
+					QRect avail = screen
+						? screen->availableGeometry()
+						: QRect(0,0,1920,1080);
+					marginR = avail.right() - anchor_.x();
+					marginB = avail.bottom() - anchor_.y() + 1;
 				} else {
 					marginR = 4;
 					marginB = 40;

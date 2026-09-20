@@ -6,6 +6,7 @@
 #include "call_history.h"
 #include "settings_dialog.h"
 #include "dialpad_dialog.h"
+#include "statusnotifieritem.h"
 
 #include <QMessageBox>
 #include <QInputDialog>
@@ -13,21 +14,25 @@
 #include <QDateTime>
 #include <QApplication>
 #include <QCursor>
+#include <QDBusConnection>
+#include <QDBusMessage>
 
 
 TrayApp::TrayApp(struct qt_mod *mod, QObject *parent)
 	: QObject(parent), mod_(mod)
 {
-	trayIcon_ = new QSystemTrayIcon(this);
+	sni_ = new StatusNotifierItem(this);
 	setTrayIcon("call-start", QString());
-	trayIcon_->setToolTip("baresip");
+	sni_->setTitle("baresip");
 
-	connect(trayIcon_, &QSystemTrayIcon::activated,
+	connect(sni_, &StatusNotifierItem::activated,
 		this, &TrayApp::onTrayActivated);
+	connect(sni_, &StatusNotifierItem::contextMenuRequested,
+		this, &TrayApp::onTrayContextMenu);
 
 	buildMenu();
 
-	trayIcon_->setContextMenu(menu_);
+	sni_->setMenu(menu_);
 }
 
 
@@ -40,32 +45,32 @@ TrayApp::~TrayApp()
 
 void TrayApp::show()
 {
-	trayIcon_->show();
+	sni_->show();
 }
 
 
 void TrayApp::setTrayIcon(const QString &themeName, const QString &fallback)
 {
-	QIcon icon = QIcon::fromTheme(themeName);
-	if (icon.isNull() && !fallback.isEmpty())
+	QString name = themeName;
+	QIcon icon = QIcon::fromTheme(name);
+	if (icon.isNull() && !fallback.isEmpty()) {
 		icon = QIcon::fromTheme(fallback);
-	if (icon.isNull())
+		name = fallback;
+	}
+	if (icon.isNull()) {
 		icon = QIcon::fromTheme("call-start");
+		name = "call-start";
+	}
 
-	trayIcon_->setIcon(icon);
+	sni_->setIconName(name);
 }
 
 
 void TrayApp::refreshTrayMenu()
 {
-	/* Under KDE Plasma, the tray menu isn't a native popup -- it's
-	 * exported over D-Bus (StatusNotifierItem/DBusMenu), and that
-	 * export can miss mutations made to an already-registered menu
-	 * (adding actions to an existing submenu, swapping Accept/Reject
-	 * for Hang Up, etc). Re-registering forces a full re-export.
-	 */
-	trayIcon_->setContextMenu(nullptr);
-	trayIcon_->setContextMenu(menu_);
+	/* The DBusMenu server rebuilds its ID map on aboutToShow, so
+	 * no explicit re-registration is needed (unlike QSystemTrayIcon
+	 * which could miss mutations to an already-registered menu). */
 }
 
 
@@ -183,28 +188,23 @@ QAction *TrayApp::findAccountAction(quintptr uaPtr) const
 }
 
 
-void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
+void TrayApp::onTrayActivated(int x, int y)
 {
-	/* Reset the icon back to normal once the user has seen it
-	 * (e.g. after a missed-call icon was shown).
-	 */
-	if (reason == QSystemTrayIcon::Trigger ||
-	    reason == QSystemTrayIcon::Context) {
-		setTrayIcon("call-start", QString());
-	}
+	/* Plasma passes the icon's screen coordinates via the
+	 * StatusNotifierItem Activate(x, y) D-Bus call. Store them
+	 * so the CallDialog can anchor near the icon. */
+	lastTrayPos_ = QPoint(x, y);
+	setTrayIcon("call-start", QString());
+	onDial();
+}
 
-	/* NB: do NOT call menu_->popup() here. Under KDE Plasma the
-	 * right-click context menu isn't shown via Qt's own popup at
-	 * all -- it's exported over D-Bus (StatusNotifierItem/DBusMenu)
-	 * and Plasma renders it as its own Wayland surface. A real Qt
-	 * popup grab (menu_->popup()) requires a focused parent window,
-	 * which the tray icon isn't, and fails under Wayland ("Failed
-	 * to create grabbing popup"). Left-click has no menu equivalent
-	 * in this protocol (it's reserved for a separate "Activate"
-	 * action) -- give it a useful default instead of nothing.
-	 */
-	if (reason == QSystemTrayIcon::Trigger)
-		onDial();
+
+void TrayApp::onTrayContextMenu(int x, int y)
+{
+	/* Plasma renders the context menu itself via DBusMenu (the
+	 * Menu property). This call is just a hint -- nothing to do. */
+	Q_UNUSED(x)
+	Q_UNUSED(y)
 }
 
 
@@ -215,7 +215,7 @@ void TrayApp::onDial()
 	 * Qt's "Recursive call detected" warning when an incoming call
 	 * arrives while a dialog is open. */
 	if (!idleCallDialog_)
-		idleCallDialog_ = new CallDialog(trayIcon_);
+		idleCallDialog_ = new CallDialog(lastTrayPos_);
 
 	/* Wire up the green button -- place the call when clicked. */
 	disconnect(idleCallDialog_, nullptr, this, nullptr);
@@ -452,7 +452,7 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 		dlg->setStateIncoming(callPtr, peerUri, peerName);
 	} else {
 		dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
-				     peerUri, peerName, trayIcon_);
+				     peerUri, peerName, lastTrayPos_);
 	}
 	callDialogs_.insert(callPtr, dlg);
 
@@ -472,9 +472,21 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 		dlg->activateWindow();
 	}
 
-	trayIcon_->showMessage("Incoming call",
-				QString("%1 <%2>").arg(peerName, peerUri),
-				QSystemTrayIcon::Information, 10000);
+	/* Notify via the freedesktop Notifications interface. */
+	QDBusMessage notif = QDBusMessage::createMethodCall(
+		"org.freedesktop.Notifications",
+		"/org/freedesktop/Notifications",
+		"org.freedesktop.Notifications",
+		"Notify");
+	notif << "baresip"          /* app name */
+	      << (uint)0             /* replaces id */
+	      << "call-incoming-symbolic"  /* icon */
+	      << "Incoming call"     /* summary */
+	      << QString("%1 <%2>").arg(peerName, peerUri)  /* body */
+	      << QStringList()       /* actions */
+	      << QVariantMap()       /* hints */
+	      << (int)10000;          /* timeout ms */
+	QDBusConnection::sessionBus().call(notif, QDBus::NoBlock);
 }
 
 
@@ -501,7 +513,7 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 	/* Pop up a non-modal call-control panel in InCall (ringing-out)
 	 * state: green=Call (disabled), red=Hangup, plus Dialpad. */
 	auto *dlg = new CallDialog(CallDialog::State::InCall, callPtr,
-				   peerUri, QString(), trayIcon_);
+				   peerUri, QString(), lastTrayPos_);
 	callDialogs_.insert(callPtr, dlg);
 
 	connect(dlg, &CallDialog::hangupRequested,

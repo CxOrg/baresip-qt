@@ -18,12 +18,12 @@
 
 #include <QDialog>
 #include <QString>
+#include <QPoint>
 
 class QLineEdit;
 class QPushButton;
 class QListWidget;
 class QListWidgetItem;
-class QSystemTrayIcon;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -38,8 +38,9 @@ public:
 	/** Dialing state: editable entry, green=Call, red=Cancel.
 	 *  If `prefill` is non-empty the entry is populated but the call
 	 *  is NOT placed until the green button is clicked.
-	 *  If `trayIcon` is set the panel positions itself near it. */
-	explicit CallDialog(QSystemTrayIcon *trayIcon = nullptr,
+	 *  `anchor` is the screen coordinate of the tray icon (from
+	 *  StatusNotifierItem::Activate) used for panel positioning. */
+	explicit CallDialog(QPoint anchor = QPoint(),
 			    QWidget *parent = nullptr);
 
 	/** Refresh the history list from the persistent store. Only
@@ -48,7 +49,7 @@ public:
 
 	/** Incoming/InCall state: read-only entry showing the peer URI. */
 	CallDialog(State state, quintptr callPtr, const QString &peerUri,
-		   const QString &peerName, QSystemTrayIcon *trayIcon = nullptr,
+		   const QString &peerName, QPoint anchor = QPoint(),
 		   QWidget *parent = nullptr);
 
 	/** Switch an existing dialog to InCall (used after Accept or
@@ -99,7 +100,7 @@ private:
 	quintptr callPtr_ = 0;
 	QString peerName_;
 	bool isOutgoing_ = false;  /**< direction for InCall label */
-	QSystemTrayIcon *trayIcon_ = nullptr;
+	QPoint anchor_;            /**< tray icon screen position for positioning */
 	bool layerShellApplied_ = false;
 
 	QLineEdit    *uriEdit_    = nullptr;
