@@ -26,7 +26,7 @@
  *  The full SIP URI is reconstructed on dialing via
  *  account_uri_complete_strdup().
  */
-static QString uriToNumber(const char *uri)
+QString uriToNumber(const char *uri)
 {
 	QString s = QString::fromUtf8(uri).trimmed();
 

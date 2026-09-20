@@ -67,3 +67,6 @@ void qt_mod_send_digit(struct call *call, char key);
 void qt_mod_quit(void);
 
 struct ua *qt_current_ua(void);
+
+/** Strip a SIP URI down to the dial number ("sip:1234@host" -> "1234"). */
+QString uriToNumber(const char *uri);

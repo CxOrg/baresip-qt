@@ -444,6 +444,12 @@ void CallDialog::setStateDialing()
 }
 
 
+void CallDialog::setDialNumber(const QString &number)
+{
+	uriEdit_->setText(number);
+}
+
+
 void CallDialog::setStateIncoming(quintptr callPtr, const QString &peerUri,
 				  const QString &peerName)
 {

@@ -165,8 +165,24 @@ void TrayApp::populateContacts()
 	for (le = list_head(contact_list(contacts)); le; le = le->next) {
 		struct contact *c = static_cast<struct contact *>(le->data);
 
-		QAction *act = contactsMenu_->addAction(
-					QString::fromUtf8(contact_str(c)));
+		/* Label is "Name  number" — the SIP URI is stripped.
+		 * The bare number is stored in the action and goes to
+		 * the dial field; the full URI is reconstructed on
+		 * dialing (account_uri_complete_strdup). */
+		QString number = uriToNumber(contact_uri(c));
+		QString name;
+		const struct sip_addr *addr = contact_addr(c);
+		if (addr && pl_isset(&addr->dname))
+			name = QString::fromUtf8(addr->dname.p,
+						 (int)addr->dname.l)
+				.remove('"').trimmed();
+
+		QString label = name.isEmpty()
+			? number
+			: QString("%1  %2").arg(name, number);
+
+		QAction *act = contactsMenu_->addAction(label);
+		act->setData(number);
 		connect(act, &QAction::triggered, this, [this, act]() {
 			onDialContact(act);
 		});
@@ -297,8 +313,14 @@ void TrayApp::onStatusToggled(QAction *action)
 
 void TrayApp::onDialContact(QAction *action)
 {
-	QByteArray uri = action->text().toUtf8();
-	qt_mod_connect(uri.constData());
+	/* Pass the contact's number to the dial panel — the user
+	 * presses the green button to place the call. */
+	QString number = action->data().toString();
+	if (number.isEmpty())
+		return;
+
+	onDial();
+	idleCallDialog_->setDialNumber(number);
 }
 
 

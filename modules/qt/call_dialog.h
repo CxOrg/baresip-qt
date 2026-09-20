@@ -46,6 +46,10 @@ public:
 	 *  shown in Dialing state. */
 	void refreshHistory();
 
+	/** Populate the dial entry with a number (Dialing state).
+	 *  The call is NOT placed until the green button is clicked. */
+	void setDialNumber(const QString &number);
+
 	/** Incoming/InCall state: read-only entry showing the peer URI. */
 	CallDialog(State state, quintptr callPtr, const QString &peerUri,
 		   const QString &peerName, QSystemTrayIcon *trayIcon = nullptr,
