@@ -135,7 +135,9 @@ void TrayApp::populateAccounts()
 	for (le = list_head(uag_list()); le; le = le->next) {
 		struct ua *ua = static_cast<struct ua *>(le->data);
 
-		QString label = QString::fromUtf8(account_aor(ua_account(ua)));
+		/* Label is "<display name>  sip:<user>" — the @domain
+		 * part of the AOR is suppressed. */
+		QString label = accountLabel(ua);
 		if (ua_isregistered(ua))
 			label += " (OK)";
 
@@ -389,7 +391,7 @@ void TrayApp::addDialpadAction(QMenu *callMenu, quintptr callPtr,
 
 /* ---- slots invoked (via queued connection) from the re/core thread ---- */
 
-void TrayApp::accountStatus(quintptr uaPtr, QString aor, QString status)
+void TrayApp::accountStatus(quintptr uaPtr, QString label, QString status)
 {
 	QAction *act = findAccountAction(uaPtr);
 	if (!act) {
@@ -402,7 +404,7 @@ void TrayApp::accountStatus(quintptr uaPtr, QString aor, QString status)
 		return;
 	}
 
-	act->setText(QString("%1 (%2)").arg(aor, status));
+	act->setText(QString("%1 (%2)").arg(label, status));
 }
 
 

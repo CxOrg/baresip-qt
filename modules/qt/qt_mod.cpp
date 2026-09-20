@@ -50,6 +50,25 @@ QString uriToNumber(const char *uri)
 }
 
 
+/** Account menu label: "<display name>  sip:<user>" — the
+ *  @domain part of the AOR is suppressed. Returns just
+ *  "sip:<user>" when the account has no display name.
+ */
+QString accountLabel(struct ua *ua)
+{
+	const struct account *acc = ua_account(ua);
+	QString user = uriToNumber(account_aor(acc));
+	QString base = QString("sip:%1").arg(user);
+
+	const char *dn = account_display_name(acc);
+	QString name = dn
+		? QString::fromUtf8(dn).remove('"').trimmed()
+		: QString();
+
+	return name.isEmpty() ? base : QString("%1  %2").arg(name, base);
+}
+
+
 /**
  * @defgroup qt_mod qt_mod
  *
@@ -116,8 +135,7 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		QMetaObject::invokeMethod(mod->tray, "accountStatus",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(ua)),
-			Q_ARG(QString,
-				QString::fromUtf8(account_aor(ua_account(ua)))),
+			Q_ARG(QString, accountLabel(ua)),
 			Q_ARG(QString, QString::fromUtf8(event_reg_str(ev))));
 		break;
 

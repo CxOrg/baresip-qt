@@ -29,7 +29,7 @@ public slots:
 	/* Called (via queued connection) from baresip's event handler,
 	 * which runs on the re/core thread.
 	 */
-	void accountStatus(quintptr uaPtr, QString aor, QString status);
+	void accountStatus(quintptr uaPtr, QString label, QString status);
 	void callIncoming(quintptr callPtr, QString peerUri, QString peerName);
 	void callOutgoing(quintptr callPtr, QString peerUri);
 	void callClosed(quintptr callPtr, bool missed,

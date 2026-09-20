@@ -78,3 +78,6 @@ struct ua *qt_current_ua(void);
 
 /** Strip a SIP URI down to the dial number ("sip:1234@host" -> "1234"). */
 QString uriToNumber(const char *uri);
+
+/** Account menu label: "<display name>  sip:<user>". */
+QString accountLabel(struct ua *ua);
