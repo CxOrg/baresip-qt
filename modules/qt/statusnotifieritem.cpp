@@ -304,10 +304,13 @@ bool StatusNotifierItem::registerOnBus()
 {
 	auto bus = QDBusConnection::sessionBus();
 
-	/* Register a unique service name. */
-	QString serviceName = QString("org.kde.StatusNotifierItem.%1-%2")
+	/* Register a unique service name. D-Bus well-known names must
+	 * match [a-zA-Z_-][a-zA-Z0-9_-]* per segment, so use the PID
+	 * (decimal) plus a small counter to guarantee uniqueness. */
+	static int counter = 0;
+	QString serviceName = QString("org.kde.StatusNotifierItem-%1-%2")
 		.arg(QCoreApplication::applicationPid())
-		.arg((quintptr)this, 0, 16);
+		.arg(counter++);
 
 	if (!bus.registerService(serviceName)) {
 		qWarning() << "SNI: failed to register service" << serviceName
