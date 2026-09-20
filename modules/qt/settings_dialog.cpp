@@ -10,6 +10,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QTabWidget>
+#include <QFrame>
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -278,13 +279,15 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 {
 	setWindowTitle("baresip Settings");
 	setAttribute(Qt::WA_DeleteOnClose, false);
-	/* Rounded corners like the call panel: translucent surface
-	 * with a themed fill/border drawn inside the 8px radius. */
+	/* Rounded corners like the call panel: the dialog surface is
+	 * transparent and an inner #settingsPanel layer carries the
+	 * themed fill, border and 8px radius. */
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: palette(window);"
-		"          border: 2px solid palette(dark);"
-		"          border-radius: 8px; }");
+		"QFrame#settingsPanel {"
+		"  background-color: palette(window);"
+		"  border: 2px solid palette(dark);"
+		"  border-radius: 8px; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
@@ -394,8 +397,20 @@ QWidget *SettingsDialog::buildAccountPage(AccountWidgets &w,
 
 void SettingsDialog::buildUi()
 {
-	auto *tabs = new QTabWidget(this);
-	auto *layout = new QVBoxLayout(this);
+	/* Outer layout is a 2px frame around an inner QFrame panel —
+	 * same structure as the call dialog. The dialog surface stays
+	 * transparent; the panel carries the themed fill, border and
+	 * rounded corners. */
+	auto *outer = new QVBoxLayout(this);
+	outer->setContentsMargins(2, 2, 2, 2);
+
+	auto *panel = new QFrame(this);
+	panel->setObjectName("settingsPanel");
+	panel->setAutoFillBackground(true);
+	outer->addWidget(panel);
+
+	auto *layout = new QVBoxLayout(panel);
+	auto *tabs = new QTabWidget(panel);
 	layout->addWidget(tabs);
 
 	/* ---- Account tabs (one per accounts-file line) ---- */
