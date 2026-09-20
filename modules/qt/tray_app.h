@@ -69,6 +69,7 @@ private:
 
 	StatusNotifierItem *sni_ = nullptr;
 	QMenu *menu_ = nullptr;
+	QMenu *callMenu_ = nullptr;  /* left-click popup with embedded panel */
 	QMenu *accountsMenu_ = nullptr;
 	QMenu *statusMenu_ = nullptr;
 	QMenu *contactsMenu_ = nullptr;
