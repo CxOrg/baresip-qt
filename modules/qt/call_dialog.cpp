@@ -174,10 +174,21 @@ void CallDialog::showPanel()
 			auto *ls = LayerShellQt::Window::get(win);
 			if (ls) {
 				/* Determine anchors and margins from the tray
-				 * icon's screen position. If the tray is in
-				 * the top half of the screen, anchor to the
-				 * top and drop down; if in the bottom half,
-				 * anchor to the bottom and open upward. */
+				 * icon's screen position. The icon's y is
+				 * inside the panel area (outside the available
+				 * geometry), so we anchor to the nearest
+				 * available-geometry edge and let the panel
+				 * extend inward from there.
+				 *
+				 * Top panel: anchor top, marginT=0 → panel
+				 *   starts at avail.top() (just below the panel
+				 *   bar) and drops down.
+				 * Bottom panel: anchor bottom, marginB=0 →
+				 *   panel ends at avail.bottom() (just above
+				 *   the panel bar) and opens upward.
+				 *
+				 * Horizontal: marginR aligns the right edge
+				 * of the popup with the icon's x position. */
 				LayerShellQt::Window::Anchors anchors;
 				int marginR = 4, marginT = 0, marginB = 0;
 
@@ -194,9 +205,22 @@ void CallDialog::showPanel()
 					if (marginR < 0)
 						marginR = 0;
 
-					/* Top half → anchor top, drop down.
-					 * Bottom half → anchor bottom, open up. */
-					if (anchor_.y() < avail.center().y()) {
+					/* If the icon is above the available area
+					 * (top panel), anchor top and drop down.
+					 * If below (bottom panel), anchor bottom
+					 * and open upward. Otherwise use the
+					 * half-screen heuristic. */
+					if (anchor_.y() < avail.top()) {
+						anchors = LayerShellQt::Window::Anchors(
+							LayerShellQt::Window::AnchorTop |
+							LayerShellQt::Window::AnchorRight);
+						marginT = 0;
+					} else if (anchor_.y() > avail.bottom()) {
+						anchors = LayerShellQt::Window::Anchors(
+							LayerShellQt::Window::AnchorBottom |
+							LayerShellQt::Window::AnchorRight);
+						marginB = 0;
+					} else if (anchor_.y() < avail.center().y()) {
 						anchors = LayerShellQt::Window::Anchors(
 							LayerShellQt::Window::AnchorTop |
 							LayerShellQt::Window::AnchorRight);
@@ -205,14 +229,14 @@ void CallDialog::showPanel()
 						anchors = LayerShellQt::Window::Anchors(
 							LayerShellQt::Window::AnchorBottom |
 							LayerShellQt::Window::AnchorRight);
-						marginB = avail.bottom() - anchor_.y() + 1;
+						marginB = avail.bottom() - anchor_.y();
 					}
 				} else {
 					/* Fallback: bottom-right. */
 					anchors = LayerShellQt::Window::Anchors(
 						LayerShellQt::Window::AnchorBottom |
 						LayerShellQt::Window::AnchorRight);
-					marginB = 40;
+					marginB = 0;
 				}
 
 				ls->setAnchors(anchors);
