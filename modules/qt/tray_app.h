@@ -10,6 +10,7 @@
 #include <QActionGroup>
 #include <QHash>
 #include <QPointer>
+#include <QDateTime>
 
 class CallDialog;
 class DialpadDialog;
@@ -57,6 +58,10 @@ private:
 	void buildMenu();
 	void populateAccounts();
 	void populateContacts();
+	void populateHistoryMenu();
+	QAction *makeHistoryAction(const QString &uri, int callType,
+				   const QString &info, const QDateTime &ts,
+				   uint32_t duration);
 	QAction *findAccountAction(quintptr uaPtr) const;
 	void setTrayIcon(const QString &themeName, const QString &fallback);
 	QMenu *addCallMenu(quintptr callPtr, const QString &title);

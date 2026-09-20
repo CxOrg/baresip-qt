@@ -111,6 +111,7 @@ void TrayApp::buildMenu()
 
 	/* Call history */
 	historyMenu_ = menu_->addMenu("Call history");
+	populateHistoryMenu();
 
 	menu_->addSeparator();
 
@@ -586,14 +587,10 @@ void TrayApp::callEstablished(quintptr callPtr)
 }
 
 
-void TrayApp::addHistory(QString uri, int callType, QString info)
+QAction *TrayApp::makeHistoryAction(const QString &uri, int callType,
+				    const QString &info, const QDateTime &ts,
+				    uint32_t duration)
 {
-	/* Persist to ~/.baresip/call_history.csv and refresh the idle
-	 * CallDialog's history list if it's open. */
-	CallHistory::instance()->add(uri, callType, info);
-	if (idleCallDialog_)
-		idleCallDialog_->refreshHistory();
-
 	QString iconName, fallback;
 
 	switch (callType) {
@@ -614,10 +611,22 @@ void TrayApp::addHistory(QString uri, int callType, QString info)
 		break;
 	}
 
-	QString ts = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-	QString label = info.isEmpty()
-		? QString("%1\n%2").arg(uri, ts)
-		: QString("%1 [%2]\n%3").arg(info, uri, ts);
+	/* Single-line label matching the CallDialog history list:
+	 * "uri  (M:SS)  MM-dd hh:mm" — duration only when connected. */
+	QString label;
+	if (duration > 0) {
+		QString dur = QString("%1:%2")
+			.arg(duration / 60)
+			.arg(duration % 60, 2, 10, QChar('0'));
+		label = QString("%1  (%3)  %2")
+			.arg(info.isEmpty() ? uri : info,
+			     ts.toString("MM-dd hh:mm"), dur);
+	}
+	else {
+		label = QString("%1  %2")
+			.arg(info.isEmpty() ? uri : info,
+			     ts.toString("MM-dd hh:mm"));
+	}
 
 	QAction *act = new QAction(label);
 	QIcon icon = QIcon::fromTheme(iconName);
@@ -629,6 +638,34 @@ void TrayApp::addHistory(QString uri, int callType, QString info)
 	connect(act, &QAction::triggered, this, [this, act]() {
 		onDialHistory(act);
 	});
+
+	return act;
+}
+
+
+void TrayApp::populateHistoryMenu()
+{
+	/* Load persisted entries (oldest first) so the submenu shows
+	 * history across restarts, not just calls from this session. */
+	auto entries = CallHistory::instance()->recent(20);
+	for (const CallHistoryEntry &e : entries)
+		historyMenu_->addAction(makeHistoryAction(
+			e.uri, e.type, e.info, e.ts, e.duration));
+
+	historyLength_ = entries.size();
+}
+
+
+void TrayApp::addHistory(QString uri, int callType, QString info)
+{
+	/* Persist to ~/.baresip/call_history.csv and refresh the idle
+	 * CallDialog's history list if it's open. */
+	CallHistory::instance()->add(uri, callType, info);
+	if (idleCallDialog_)
+		idleCallDialog_->refreshHistory();
+
+	QAction *act = makeHistoryAction(uri, callType, info,
+					 QDateTime::currentDateTime(), 0);
 
 	if (historyLength_ >= 20) {
 		QList<QAction *> acts = historyMenu_->actions();
