@@ -286,10 +286,15 @@ void CallDialog::buildUi()
 
 	/* Call history list (shown only in Dialing state). */
 	historyList_ = new QListWidget(this);
-	historyList_->setMaximumHeight(120);
+	historyList_->setMaximumHeight(200);
 	historyList_->setMinimumHeight(60);
 	historyList_->setUniformItemSizes(true);
-	/* Show ~10 entries before scrolling. */
+	/* Disable horizontal scrollbar — let the dialog resize to fit
+	 * the widest entry instead of clipping it. */
+	historyList_->setHorizontalScrollBarPolicy(
+		Qt::ScrollBarAlwaysOff);
+	/* Wrap text if an entry is too long, instead of clipping. */
+	historyList_->setWordWrap(true);
 	historyList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	layout->addWidget(historyList_);
 	connect(historyList_, &QListWidget::itemClicked,
@@ -311,7 +316,10 @@ void CallDialog::buildUi()
 	connect(redBtn_, &QPushButton::clicked,
 		this, &CallDialog::onRed);
 
+	/* Use a reasonable initial size; adjustSize() in showPanel()
+	 * will adapt it to the actual content. */
 	resize(340, 320);
+	layout->setSizeConstraint(QLayout::SetFixedSize);
 }
 
 

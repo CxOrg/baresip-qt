@@ -122,7 +122,7 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		QMetaObject::invokeMethod(mod->tray, "callIncoming",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),
-			Q_ARG(QString, QString::fromUtf8(call_peeruri(call))),
+			Q_ARG(QString, uriToNumber(call_peeruri(call))),
 			Q_ARG(QString, QString::fromUtf8(call_peername(call))));
 		break;
 
