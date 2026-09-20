@@ -40,7 +40,8 @@ static QPushButton *makeButton(const QString &text,
 
 	/* Tint via stylesheet so the colour is visible on any theme. */
 	if (green)
-		btn->setStyleSheet(
+		btn->setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(
 			"QPushButton { background-color: #2e7d32;"
 			"              color: white;"
 			"              font-weight: bold;"
@@ -75,10 +76,10 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
+	setAttribute(Qt::WA_TranslucentBackground);
 	/* Let the active Qt widget style (Qt6Curve) style the panel
 	 * like a menu — it provides the dark themed background
-	 * automatically. No WA_TranslucentBackground (causes black
-	 * on Wayland/LayerShellQt). */
+	 * automatically. */
 	setStyleSheet(
 		"QDialog { border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
@@ -100,6 +101,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
+	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QDialog { border-radius: 8px; }");
 	installEventFilter(this);
