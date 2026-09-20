@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QMessageBox>
+#include <QProcess>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
@@ -112,25 +113,6 @@ static QString lineParam(const QString &line, const QString &key)
 	if (v.startsWith('"') && v.endsWith('"') && v.length() > 1)
 		v = v.mid(1, v.length() - 2);
 	return v;
-}
-
-/** "user@host[:port]" extracted from the line's <sip:...> AOR,
- *  for matching against account_aor() of a live UA. */
-static QString lineAorUserHost(const QString &line)
-{
-	int lt = line.indexOf('<');
-	int gt = line.indexOf('>', lt);
-	if (lt < 0 || gt < 0)
-		return QString();
-	QString aor = line.mid(lt + 1, gt - lt - 1);
-	int semi = aor.indexOf(';');
-	if (semi >= 0)
-		aor = aor.left(semi);
-	if (aor.startsWith("sip:", Qt::CaseInsensitive))
-		aor = aor.mid(4);
-	else if (aor.startsWith("sips:", Qt::CaseInsensitive))
-		aor = aor.mid(5);
-	return aor.trimmed();
 }
 
 static QString displayNameFromLine(const QString &line)
@@ -538,37 +520,13 @@ void SettingsDialog::loadSettings()
 
 void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 {
-	/* Find the UA matching this account line by AOR — index-based
-	 * mapping breaks once disabled accounts are destroyed and the
-	 * remaining UAs shift position. */
-	QString origLine = accountLine(index);
-	if (origLine.isEmpty())
+	if (accountLine(index).isEmpty())
 		return;
 
-	QString wantAor = lineAorUserHost(origLine);
-	struct ua *ua = nullptr;
-	struct le *le;
-	for (le = list_head(uag_list()); le; le = le->next) {
-		struct ua *u = static_cast<struct ua *>(le->data);
-		QString have = QString::fromUtf8(
-			account_aor(ua_account(u)));
-		if (have.startsWith("sip:", Qt::CaseInsensitive))
-			have = have.mid(4);
-		else if (have.startsWith("sips:", Qt::CaseInsensitive))
-			have = have.mid(5);
-		if (have == wantAor) {
-			ua = u;
-			break;
-		}
-	}
-
-	/* No account_set_*() live apply here — the UA is always
-	 * destroyed and recreated from the persisted file below, so
-	 * mutating it first would be discarded anyway. */
-
 	/* Persist to ~/.baresip/accounts (update known params in-place,
-	 * preserving unknown params like outbound, 100rel, etc.). Runs
-	 * even when the account has no live UA. */
+	 * preserving unknown params like outbound, 100rel, etc.). The
+	 * app is restarted after saving, which re-parses the file and
+	 * rebuilds all UAs — no live apply is needed here. */
 	QMap<QString, QString> updates;
 	updates["enabled"] = w.enabled->isChecked() ? "yes" : "no";
 	if (!w.displayName->text().isEmpty())
@@ -603,24 +561,9 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 	updateAccountsParams(updates, index);
 
 	/* The SIP domain lives inside the <sip:user@domain> AOR, not in
-	 * a ;param — update it separately. Takes effect via the UA
-	 * recreation below, since the AOR is the account's identity. */
+	 * a ;param — update it separately. */
 	if (!w.sipDomain->text().isEmpty())
 		updateAccountsDomain(w.sipDomain->text(), index);
-
-	/* Enabled transitions — ua_* / mem_deref must run on the re
-	 * thread, so they all go through the mqueue. An updated
-	 * account is recreated (destroy + alloc) rather than just
-	 * re-registered: ua_register on a live registration leaves
-	 * the reg client stuck in "unregistering", while recreation
-	 * guarantees a clean disconnect and re-register with the new
-	 * parameters. The mqueue is FIFO so the free always runs
-	 * before the alloc. */
-	QString newLine = accountLine(index);
-	if (ua)
-		qt_mod_ua_free(ua);
-	if (w.enabled->isChecked() && !newLine.isEmpty())
-		qt_mod_ua_alloc(newLine);
 }
 
 
@@ -635,16 +578,31 @@ void SettingsDialog::saveSettings()
 }
 
 
+void SettingsDialog::restartApp()
+{
+	/* Restart the whole app: simplest reliable re-register. The
+	 * detached shell waits for this process to exit (releasing
+	 * the SIP socket) before launching the new instance, which
+	 * re-parses the accounts file and rebuilds all UAs. */
+	QString cmd = QString(
+		"while kill -0 %1 2>/dev/null; do sleep 0.1; done;"
+		" exec baresip").arg(QCoreApplication::applicationPid());
+	QProcess::startDetached("sh", {"-c", cmd});
+	qt_mod_quit();
+}
+
+
 void SettingsDialog::onApply()
 {
 	saveSettings();
+	restartApp();
 }
 
 
 void SettingsDialog::onOk()
 {
 	saveSettings();
-	accept();
+	restartApp();
 }
 
 

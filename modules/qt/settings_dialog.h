@@ -12,9 +12,9 @@
  * ";enabled={yes,no}" addr-param (ignored by baresip's parser, honored
  * by the qt module which unregisters disabled accounts at startup).
  *
- * Settings are applied live via the account_set_*() APIs and also
- * written back to ~/.baresip/accounts and ~/.baresip/config so they
- * persist across restarts.
+ * Settings are written back to ~/.baresip/accounts and
+ * ~/.baresip/config, then the app restarts itself so the accounts
+ * file is re-parsed and all UAs are rebuilt with the new settings.
  */
 #pragma once
 
@@ -65,6 +65,7 @@ private:
 	void loadAccount(AccountWidgets &w, int index);
 	void saveSettings();
 	void saveAccount(const AccountWidgets &w, int index);
+	void restartApp();
 
 	AccountWidgets accounts_[kMaxAccounts];
 
