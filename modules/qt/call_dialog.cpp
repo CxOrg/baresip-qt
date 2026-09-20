@@ -77,12 +77,9 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
-	/* Solid #13161b background with rounded corners —
-	 * WA_TranslucentBackground is kept so the corner cutouts
-	 * render transparent instead of black. */
+	/* The dialog itself is transparent — the inner #callPanel
+	 * layer carries the themed background, border and radius. */
 	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"          border-radius: 8px; }"
 		"QFrame#callPanel { background-color: palette(window);"
 		"         border: 2px solid #2a2e33;"
 		"         border-radius: 8px; }");
@@ -107,8 +104,6 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: #13161b;"
-		"          border-radius: 8px; }"
 		"QFrame#callPanel { background-color: palette(window);"
 		"         border: 2px solid #2a2e33;"
 		"         border-radius: 8px; }");
