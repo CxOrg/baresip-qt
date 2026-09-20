@@ -237,8 +237,8 @@ void CallDialog::fitWidthToHistory()
 	maxWidth += style()->pixelMetric(QStyle::PM_ScrollBarExtent) + 8;
 
 	/* Don't shrink below the initial width (buttons + label). */
-	if (maxWidth < 340)
-		maxWidth = 340;
+	if (maxWidth < 470)
+		maxWidth = 470;
 
 	resize(maxWidth, height());
 }
@@ -381,9 +381,9 @@ void CallDialog::buildUi()
 	connect(redBtn_, &QPushButton::clicked,
 		this, &CallDialog::onRed);
 
-	/* Use a reasonable initial size; refreshHistory/adjustSize
-	 * will widen the dialog to fit the longest history entry. */
-	resize(340, 320);
+	/* Same width as the settings/contacts panels; fitWidthToHistory
+	 * still expands it if a list entry needs more room. */
+	resize(470, 320);
 }
 
 

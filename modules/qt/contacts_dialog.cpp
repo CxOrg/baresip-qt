@@ -140,7 +140,7 @@ ContactsDialog::ContactsDialog(QWidget *parent)
 	buildUi();
 	reloadContacts();
 	reloadHistory();
-	resize(420, 400);
+	resize(470, 400);
 	setupLayerShell();
 }
 
