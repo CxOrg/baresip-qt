@@ -76,6 +76,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	installEventFilter(this);
 	buildUi();
 	applyState();
+	setupLayerShell();
 }
 
 
@@ -93,6 +94,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
+	setupLayerShell();
 }
 
 
@@ -132,47 +134,55 @@ void CallDialog::positionNearTray()
 }
 
 
+void CallDialog::setupLayerShell()
+{
+#ifdef HAVE_LAYERSHELL
+	/* Force creation of the native window handle so we can apply
+	 * the LayerShellQt integration BEFORE the window is shown.
+	 * LayerShellQt installs an event filter on the QWindow that
+	 * intercepts the surface creation and uses the layer-shell
+	 * protocol instead of xdg-shell. This must happen before show(). */
+	setAttribute(Qt::WA_NativeWindow);
+	winId();
+
+	QWindow *win = windowHandle();
+	if (!win)
+		return;
+
+	auto *ls = LayerShellQt::Window::get(win);
+	if (!ls)
+		return;
+
+	/* Anchor to bottom-right corner (where the system tray
+	 * typically lives), opening upward like a tray menu. */
+	ls->setAnchors(LayerShellQt::Window::Anchors(
+		       LayerShellQt::Window::AnchorBottom |
+		       LayerShellQt::Window::AnchorRight));
+	ls->setLayer(LayerShellQt::Window::LayerOverlay);
+	ls->setKeyboardInteractivity(
+		LayerShellQt::Window::KeyboardInteractivityOnDemand);
+	ls->setScope("baresip-call-panel");
+	ls->setCloseOnDismissed(true);
+#endif
+}
+
+
 void CallDialog::showPanel()
 {
 	adjustSize();
 
 #ifdef HAVE_LAYERSHELL
-	/* Use the Wayland layer-shell protocol (via LayerShellQt) to
-	 * anchor the panel near the system tray. This gives us:
-	 *  - Correct positioning near the tray icon (bottom-right edge)
-	 *  - Always-on-top (Overlay layer)
-	 *  - Keyboard input without popup grabbing
-	 *  - No transient-parent requirement (works on Wayland) */
-	show();  /* Create the QWindow handle first. */
-
 	QWindow *win = windowHandle();
 	if (win) {
 		auto *ls = LayerShellQt::Window::get(win);
 		if (ls) {
-			/* Anchor to bottom-right corner (where the tray
-			 * typically lives), opening upward. */
-			ls->setAnchors(LayerShellQt::Window::Anchors(
-				       LayerShellQt::Window::AnchorBottom |
-				       LayerShellQt::Window::AnchorRight));
-			ls->setLayer(LayerShellQt::Window::LayerOverlay);
-			ls->setKeyboardInteractivity(
-				LayerShellQt::Window::KeyboardInteractivityOnDemand);
-			ls->setScope("baresip-call-panel");
-			ls->setCloseOnDismissed(true);
-
-			/* Margins to offset from the screen corner so the
-			 * panel appears near the tray icon rather than
-			 * flush in the corner. Use the tray icon geometry
-			 * if available, otherwise a reasonable default. */
+			/* Update margins based on tray icon position. */
 			QRect iconGeo;
 			if (trayIcon_)
 				iconGeo = trayIcon_->geometry();
 
 			int marginR, marginB;
 			if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
-				/* Position the panel's right edge at the
-				 * tray icon's right edge, and the panel's
-				 * bottom edge at the tray icon's top. */
 				QScreen *screen = QGuiApplication::screenAt(
 							iconGeo.bottomRight());
 				if (!screen)
@@ -182,17 +192,16 @@ void CallDialog::showPanel()
 				marginR = avail.right() - iconGeo.right();
 				marginB = avail.bottom() - iconGeo.top() + 1;
 			} else {
-				/* Default: small offset from the corner. */
 				marginR = 4;
-				marginB = 40;  /* above the tray bar */
+				marginB = 40;
 			}
 
 			ls->setMargins(QMargins(0, 0, marginR, marginB));
 			ls->setDesiredSize(size());
+			show();
 			return;
 		}
 	}
-	/* Fall through if layer shell isn't actually available at runtime. */
 #endif
 	/* Fallback: plain frameless tool window, positioned manually. */
 	positionNearTray();

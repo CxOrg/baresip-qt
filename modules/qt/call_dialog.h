@@ -93,6 +93,7 @@ private:
 	void buildUi();
 	void applyState();
 	void positionNearTray();
+	void setupLayerShell();
 
 	State state_;
 	quintptr callPtr_ = 0;
