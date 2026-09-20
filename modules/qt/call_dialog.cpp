@@ -76,10 +76,11 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
-	/* Semi-transparent #13161b background (50% opacity) with
-	 * rounded corners — alpha blends over the Plasma panel. */
+	/* Solid #13161b background with rounded corners —
+	 * WA_TranslucentBackground is kept so the corner cutouts
+	 * render transparent instead of black. */
 	setStyleSheet(
-		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"QDialog { background-color: #13161b;"
 		"          border: 2px solid #13161b;"
 		"          border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
@@ -103,7 +104,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"QDialog { background-color: #13161b;"
 		"          border: 2px solid #13161b;"
 		"          border-radius: 8px; }");
 	installEventFilter(this);
