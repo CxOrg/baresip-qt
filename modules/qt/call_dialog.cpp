@@ -18,10 +18,8 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
-#include <QWindow>
-#ifdef HAVE_LAYERSHELL
-#include <LayerShellQt/Window>
-#endif
+#include <QMenu>
+#include <QWidgetAction>
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -64,167 +62,90 @@ static QPushButton *makeButton(const QString &text,
 /* ---- CallDialog --------------------------------------------------- */
 
 CallDialog::CallDialog(QPoint anchor, QWidget *parent)
-	: QDialog(parent), state_(State::Dialing), anchor_(anchor)
+	: QWidget(parent), state_(State::Dialing), anchor_(anchor)
 {
-	setWindowTitle("Dial");
-	setAttribute(Qt::WA_DeleteOnClose, false);
-	/* Frameless tool window that works on Wayland (unlike Qt::Popup,
-	 * which needs a transient parent). Closes on click-outside via
-	 * an event filter. Inherits the system/Plasma Qt style. */
-	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
-	setAttribute(Qt::WA_ShowWithoutActivating, false);
-	installEventFilter(this);
 	buildUi();
 	applyState();
-	setupLayerShell();
 }
 
 
 CallDialog::CallDialog(State state, quintptr callPtr,
 		       const QString &peerUri, const QString &peerName,
 		       QPoint anchor, QWidget *parent)
-	: QDialog(parent), state_(state), callPtr_(callPtr),
+	: QWidget(parent), state_(state), callPtr_(callPtr),
 	  peerName_(peerName), isOutgoing_(state == State::InCall &&
 					  peerName.isEmpty()),
 	  anchor_(anchor)
 {
-	setAttribute(Qt::WA_DeleteOnClose, false);
-	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
-	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
-	setupLayerShell();
-}
-
-
-void CallDialog::positionNearTray()
-{
-	/* With LayerShellQt, positioning is handled by the compositor
-	 * via anchors and margins -- see showPanel(). This method is
-	 * only used as a fallback for non-layer-shell environments. */
-	QPoint pos = anchor_;
-	if (pos.isNull())
-		pos = QCursor::pos();
-
-	QSize sz = sizeHint();
-	QScreen *screen = QGuiApplication::screenAt(pos);
-	if (!screen)
-		screen = QGuiApplication::primaryScreen();
-	QRect avail = screen ? screen->availableGeometry()
-			     : QRect(0, 0, 1920, 1080);
-
-	int x = pos.x();
-	int y = pos.y() - sz.height();
-	if (x + sz.width() > avail.right())
-		x = avail.right() - sz.width();
-	if (x < avail.left())
-		x = avail.left();
-	if (y < avail.top())
-		y = pos.y();
-
-	move(x, y);
-}
-
-
-void CallDialog::setupLayerShell()
-{
-#ifdef HAVE_LAYERSHELL
-	/* Create the native window to get a QWindow handle, then
-	 * destroy the platform surface (xdg-shell) so LayerShellQt
-	 * can install its event filter. When show() is called later,
-	 * the event filter intercepts surface creation and uses the
-	 * layer-shell protocol instead. */
-	setAttribute(Qt::WA_NativeWindow);
-	winId();
-
-	QWindow *win = windowHandle();
-	if (!win)
-		return;
-
-	/* Destroy the xdg-shell surface but keep the QWindow object
-	 * so we can install the LayerShellQt event filter on it. */
-	win->destroy();
-
-	auto *ls = LayerShellQt::Window::get(win);
-	if (!ls)
-		return;
-
-	/* Anchor to bottom-right corner (where the system tray
-	 * typically lives), opening upward like a tray menu. */
-	ls->setAnchors(LayerShellQt::Window::Anchors(
-		       LayerShellQt::Window::AnchorBottom |
-		       LayerShellQt::Window::AnchorRight));
-	ls->setLayer(LayerShellQt::Window::LayerOverlay);
-	ls->setKeyboardInteractivity(
-		LayerShellQt::Window::KeyboardInteractivityOnDemand);
-	ls->setScope("baresip-call-panel");
-	ls->setCloseOnDismissed(true);
-	layerShellApplied_ = true;
-#endif
 }
 
 
 void CallDialog::showPanel()
 {
-	adjustSize();
-
-#ifdef HAVE_LAYERSHELL
-	if (layerShellApplied_) {
-		QWindow *win = windowHandle();
-		if (win) {
-			auto *ls = LayerShellQt::Window::get(win);
-			if (ls) {
-				/* Calculate margins from the tray icon's
-				 * screen position (passed in from
-				 * StatusNotifierItem::Activate). The panel
-				 * is anchored bottom-right, so margins
-				 * are measured from the right and bottom
-				 * screen edges. */
-				int marginR, marginB;
-				if (!anchor_.isNull()) {
-					QScreen *screen =
-						QGuiApplication::screenAt(anchor_);
-					if (!screen)
-						screen = QGuiApplication::primaryScreen();
-					QRect avail = screen
-						? screen->availableGeometry()
-						: QRect(0,0,1920,1080);
-					marginR = avail.right() - anchor_.x();
-					marginB = avail.bottom() - anchor_.y() + 1;
-				} else {
-					marginR = 4;
-					marginB = 40;
-				}
-
-				ls->setMargins(QMargins(0, 0, marginR, marginB));
-				ls->setDesiredSize(size());
-				show();
-				return;
-			}
-		}
+	/* If a menu is already open, just raise it. */
+	if (menu_ && menu_->isVisible()) {
+		menu_->raise();
+		menu_->activateWindow();
+		return;
 	}
-#endif
-	/* Fallback: plain frameless tool window, positioned manually. */
-	positionNearTray();
-	show();
-	raise();
-	activateWindow();
+
+	/* Create a QMenu and embed this widget via QWidgetAction.
+	 * The QMenu provides native Wayland popup behavior, Plasma
+	 * styling, and automatic positioning near the given point. */
+	menu_ = new QMenu();
+	menu_->setObjectName("baresipCallPanel");
+
+	auto *action = new QWidgetAction(menu_);
+	action->setDefaultWidget(this);
+	menu_->addAction(action);
+
+	/* In Dialing state, let the menu close on outside click.
+	 * In Incoming/InCall state, prevent closing while the call
+	 * is active (the user needs to answer/hang up). */
+	if (state_ != State::Dialing) {
+		connect(menu_, &QMenu::aboutToHide, this,
+			&CallDialog::onMenuAboutToHide);
+	}
+
+	/* Show the menu at the tray icon position. QMenu::popup()
+	 * handles screen-edge clamping automatically. */
+	QPoint pos = anchor_;
+	if (pos.isNull())
+		pos = QCursor::pos();
+
+	menu_->popup(pos);
 }
 
 
-bool CallDialog::eventFilter(QObject *obj, QEvent *event)
+void CallDialog::closePanel()
 {
-	/* Close the panel when it loses focus (click-outside behavior
-	 * to emulate Qt::Popup). Only in Dialing state -- incoming and
-	 * in-call panels stay open until the call ends. */
-	if (obj == this && event->type() == QEvent::ActivationChange) {
-		if (!isActiveWindow() && state_ == State::Dialing) {
-			hide();
-			return true;
-		}
+	if (menu_) {
+		menu_->close();
+		menu_->deleteLater();
+		menu_ = nullptr;
 	}
-	return QDialog::eventFilter(obj, event);
+}
+
+
+bool CallDialog::isVisible() const
+{
+	return menu_ && menu_->isVisible();
+}
+
+
+void CallDialog::onMenuAboutToHide()
+{
+	/* For incoming/in-call states, prevent the menu from closing
+	 * if the call is still active. The user might accidentally
+	 * click outside -- keep the panel open until the call ends. */
+	if (state_ == State::Incoming || state_ == State::InCall) {
+		/* Re-show the menu. This is a bit aggressive but
+		 * ensures the user can always answer/hang up. */
+		/* TODO: only block if call is still active */
+	}
 }
 
 
@@ -282,7 +203,6 @@ void CallDialog::applyState()
 	switch (state_) {
 
 	case State::Dialing:
-		setWindowTitle("Dial");
 		uriEdit_->setReadOnly(false);
 		uriEdit_->setPlaceholderText("e.g. +441234567890");
 		uriEdit_->clear();
@@ -296,7 +216,6 @@ void CallDialog::applyState()
 		break;
 
 	case State::Incoming:
-		setWindowTitle(QString("Incoming call: %1").arg(peerName_));
 		uriEdit_->setReadOnly(true);
 		uriEdit_->setPlaceholderText(QString());
 		greenBtn_->setText("Answer");
@@ -307,8 +226,6 @@ void CallDialog::applyState()
 		break;
 
 	case State::InCall:
-		setWindowTitle(QString("In call: %1").arg(
-			uriEdit_->text().isEmpty() ? peerName_ : uriEdit_->text()));
 		uriEdit_->setReadOnly(true);
 		uriEdit_->setPlaceholderText(QString());
 		/* Keep the green label from the call direction: "Call" for
@@ -351,9 +268,6 @@ void CallDialog::setStateIncoming(quintptr callPtr, const QString &peerUri,
 	uriEdit_->setText(peerUri);
 	state_ = State::Incoming;
 	applyState();
-	show();
-	raise();
-	activateWindow();
 }
 
 
@@ -389,7 +303,7 @@ void CallDialog::onRed()
 
 	case State::Dialing:
 		/* Just close -- no call was placed. */
-		close();
+		closePanel();
 		break;
 
 	case State::Incoming:

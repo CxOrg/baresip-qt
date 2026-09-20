@@ -468,8 +468,8 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 	if (dlg != idleCallDialog_) {
 		dlg->showPanel();
 	} else {
-		dlg->raise();
-		dlg->activateWindow();
+		/* Already visible -- re-show to bring to front. */
+		dlg->showPanel();
 	}
 
 	/* Notify via the freedesktop Notifications interface. */
@@ -557,7 +557,7 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 				qt_mod_connect(u.constData());
 			});
 		} else {
-			cdlg->close();
+			cdlg->closePanel();
 		}
 	}
 

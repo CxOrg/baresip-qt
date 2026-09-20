@@ -17,14 +17,6 @@ if(NOT QT_VERSION_MAJOR)
   return()
 endif()
 
-# LayerShellQt provides Wayland layer-shell positioning (tray-anchored
-# popup panels on KDE Plasma). Optional -- falls back to plain
-# frameless Tool window if not available.
-find_package(LayerShellQt QUIET)
-if(LayerShellQt_FOUND)
-  set(HAVE_LAYERSHELL ON)
-endif()
-
 list(APPEND MODULES_DETECTED ${PROJECT_NAME})
 set(MODULES_DETECTED ${MODULES_DETECTED} PARENT_SCOPE)
 
@@ -41,10 +33,6 @@ else()
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBRARIES})
-if(HAVE_LAYERSHELL)
-  target_link_libraries(${PROJECT_NAME} PRIVATE LayerShellQtInterface)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_LAYERSHELL)
-endif()
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Wno-deprecated-declarations
