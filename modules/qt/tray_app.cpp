@@ -215,7 +215,7 @@ void TrayApp::onDial()
 	 * Qt's "Recursive call detected" warning when an incoming call
 	 * arrives while a dialog is open. */
 	if (!idleCallDialog_)
-		idleCallDialog_ = new CallDialog();
+		idleCallDialog_ = new CallDialog(trayIcon_);
 
 	/* Wire up the green button -- place the call when clicked. */
 	disconnect(idleCallDialog_, nullptr, this, nullptr);
@@ -225,9 +225,7 @@ void TrayApp::onDial()
 		qt_mod_connect(u.constData());
 	});
 
-	idleCallDialog_->show();
-	idleCallDialog_->raise();
-	idleCallDialog_->activateWindow();
+	idleCallDialog_->showPanel();
 }
 
 
@@ -454,7 +452,7 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 		dlg->setStateIncoming(callPtr, peerUri, peerName);
 	} else {
 		dlg = new CallDialog(CallDialog::State::Incoming, callPtr,
-				     peerUri, peerName);
+				     peerUri, peerName, trayIcon_);
 	}
 	callDialogs_.insert(callPtr, dlg);
 
@@ -468,10 +466,11 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 		});
 
 	if (dlg != idleCallDialog_) {
-		dlg->show();
+		dlg->showPanel();
+	} else {
+		dlg->raise();
+		dlg->activateWindow();
 	}
-	dlg->raise();
-	dlg->activateWindow();
 
 	trayIcon_->showMessage("Incoming call",
 				QString("%1 <%2>").arg(peerName, peerUri),
@@ -499,10 +498,10 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 	callMenus_.insert(callPtr, callMenu);
 	refreshTrayMenu();
 
-	/* Pop up a non-modal call-control dialog in InCall (ringing-out)
+	/* Pop up a non-modal call-control panel in InCall (ringing-out)
 	 * state: green=Call (disabled), red=Hangup, plus Dialpad. */
 	auto *dlg = new CallDialog(CallDialog::State::InCall, callPtr,
-				   peerUri, QString());
+				   peerUri, QString(), trayIcon_);
 	callDialogs_.insert(callPtr, dlg);
 
 	connect(dlg, &CallDialog::hangupRequested,
@@ -512,9 +511,7 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 			openDialpad(cp, label);
 		});
 
-	dlg->show();
-	dlg->raise();
-	dlg->activateWindow();
+	dlg->showPanel();
 }
 
 

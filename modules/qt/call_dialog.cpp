@@ -14,6 +14,11 @@
 #include <QListWidgetItem>
 #include <QPalette>
 #include <QIcon>
+#include <QSystemTrayIcon>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QApplication>
+#include <QCursor>
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -55,11 +60,15 @@ static QPushButton *makeButton(const QString &text,
 
 /* ---- CallDialog --------------------------------------------------- */
 
-CallDialog::CallDialog(QWidget *parent)
-	: QDialog(parent), state_(State::Dialing)
+CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
+	: QDialog(parent), state_(State::Dialing), trayIcon_(trayIcon)
 {
 	setWindowTitle("Dial");
 	setAttribute(Qt::WA_DeleteOnClose, false);
+	/* Frameless popup that closes when clicking outside, like a
+	 * menu extending from the tray icon. Inherits the system/Plasma
+	 * Qt style automatically. */
+	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
 	buildUi();
 	applyState();
 }
@@ -67,15 +76,69 @@ CallDialog::CallDialog(QWidget *parent)
 
 CallDialog::CallDialog(State state, quintptr callPtr,
 		       const QString &peerUri, const QString &peerName,
-		       QWidget *parent)
+		       QSystemTrayIcon *trayIcon, QWidget *parent)
 	: QDialog(parent), state_(state), callPtr_(callPtr),
 	  peerName_(peerName), isOutgoing_(state == State::InCall &&
-					  peerName.isEmpty())
+					  peerName.isEmpty()),
+	  trayIcon_(trayIcon)
 {
 	setAttribute(Qt::WA_DeleteOnClose, false);
+	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
+}
+
+
+void CallDialog::positionNearTray()
+{
+	/* Try to get the tray icon geometry. Under KDE Plasma/Wayland
+	 * QSystemTrayIcon::geometry() often returns an empty rect, so
+	 * fall back to the cursor position (the click that opened us). */
+	QRect iconGeo;
+	if (trayIcon_)
+		iconGeo = trayIcon_->geometry();
+
+	QPoint pos;
+	if (!iconGeo.isNull() && !iconGeo.isEmpty()) {
+		pos = iconGeo.bottomLeft();
+	} else {
+		/* Fall back to the current cursor position. */
+		pos = QCursor::pos();
+	}
+
+	/* Move up so the panel opens upward from the icon (like a
+	 * tray menu), and clamp to the nearest screen. */
+	QSize sz = sizeHint();
+	QScreen *screen = QGuiApplication::screenAt(pos);
+	if (!screen)
+		screen = QGuiApplication::primaryScreen();
+	QRect avail = screen ? screen->availableGeometry()
+			     : QRect(0, 0, 1920, 1080);
+
+	int x = pos.x();
+	int y = pos.y() - sz.height();
+	/* Clamp horizontally so the panel stays on-screen. */
+	if (x + sz.width() > avail.right())
+		x = avail.right() - sz.width();
+	if (x < avail.left())
+		x = avail.left();
+	/* If it goes off the top, open downward instead. */
+	if (y < avail.top())
+		y = pos.y();
+
+	move(x, y);
+}
+
+
+void CallDialog::showPanel()
+{
+	/* Position before showing so it appears in the right place. */
+	adjustSize();
+	positionNearTray();
+	show();
+	raise();
+	activateWindow();
 }
 
 

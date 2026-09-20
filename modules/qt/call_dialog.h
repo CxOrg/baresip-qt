@@ -1,16 +1,18 @@
 /**
- * @file qt/call_dialog.h Qt UI module -- unified call control dialog
+ * @file qt/call_dialog.h Qt UI module -- unified call control panel
  *
- * A single non-modal dialog that adapts to three call states:
+ * A frameless popup panel that appears near the tray icon on
+ * left-click, adapting to three call states:
  *
  *  - Dialing:   number entry editable; green=Call, red=Cancel
  *  - Incoming:  number read-only;      green=Answer, red=Hangup
  *  - InCall:    number read-only;     green=Call/Answer (disabled),
  *               red=Hangup, optional Dialpad
  *
- * The dialog is non-modal (show(), not exec()) so it can coexist
- * with tray menus and multiple simultaneous calls without triggering
- * Qt's "Recursive call detected" warning.
+ * The panel uses Qt::Popup | Qt::FramelessWindowHint so it appears
+ * as a lightweight popup extending from the tray icon (similar to
+ * a menu) and closes when the user clicks outside it. It inherits
+ * the Plasma/system Qt style automatically.
  */
 #pragma once
 
@@ -21,6 +23,7 @@ class QLineEdit;
 class QPushButton;
 class QListWidget;
 class QListWidgetItem;
+class QSystemTrayIcon;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -34,8 +37,10 @@ public:
 
 	/** Dialing state: editable entry, green=Call, red=Cancel.
 	 *  If `prefill` is non-empty the entry is populated but the call
-	 *  is NOT placed until the green button is clicked. */
-	explicit CallDialog(QWidget *parent = nullptr);
+	 *  is NOT placed until the green button is clicked.
+	 *  If `trayIcon` is set the panel positions itself near it. */
+	explicit CallDialog(QSystemTrayIcon *trayIcon = nullptr,
+			    QWidget *parent = nullptr);
 
 	/** Refresh the history list from the persistent store. Only
 	 *  shown in Dialing state. */
@@ -43,7 +48,8 @@ public:
 
 	/** Incoming/InCall state: read-only entry showing the peer URI. */
 	CallDialog(State state, quintptr callPtr, const QString &peerUri,
-		   const QString &peerName, QWidget *parent = nullptr);
+		   const QString &peerName, QSystemTrayIcon *trayIcon = nullptr,
+		   QWidget *parent = nullptr);
 
 	/** Switch an existing dialog to InCall (used after Accept or
 	 *  after an outgoing call connects). */
@@ -57,6 +63,9 @@ public:
 	 *  dialog is repurposed for an incoming call). */
 	void setStateIncoming(quintptr callPtr, const QString &peerUri,
 			      const QString &peerName);
+
+	/** Show the panel positioned near the tray icon. */
+	void showPanel();
 
 	quintptr callPtr() const { return callPtr_; }
 	State state() const { return state_; }
@@ -78,11 +87,13 @@ signals:
 private:
 	void buildUi();
 	void applyState();
+	void positionNearTray();
 
 	State state_;
 	quintptr callPtr_ = 0;
 	QString peerName_;
 	bool isOutgoing_ = false;  /**< direction for InCall label */
+	QSystemTrayIcon *trayIcon_ = nullptr;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
