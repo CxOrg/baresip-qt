@@ -57,24 +57,83 @@ static bool updateAccountsParams(const QMap<QString, QString> &updates)
 				QString param = QString(";%1=").arg(key);
 				int pi = line.indexOf(param);
 				if (pi >= 0) {
-					/* Replace existing value. */
+					/* Replace existing value. The value ends at
+					 * the NEAREST of ';', '>' or end-of-line —
+					 * scanning past '>' would eat the closing
+					 * bracket of the <sip:...> address. */
 					int vi = pi + param.length();
-					int end = line.indexOf(';', vi);
-					if (end < 0) end = line.indexOf('>', vi);
-					if (end < 0) end = line.length() - 1;
+					int end = line.indexOf('\n', vi);
+					if (end < 0) end = line.length();
+					for (const char c : {';', '>'}) {
+						int i = line.indexOf(c, vi);
+						if (i >= 0 && i < end)
+							end = i;
+					}
 					QString oldVal = line.mid(vi, end - vi);
 					QString quoted = oldVal.startsWith('"') ? oldVal : QString();
 					QString newVal = val;
 					if (quoted.startsWith('"')) newVal = QString("\"%1\"").arg(val);
 					line.replace(vi, end - vi, newVal);
 				} else if (!val.isEmpty()) {
-					/* Insert before the closing > */
+					/* Append as an addr-param AFTER the
+					 * closing '>' — inserting before it
+					 * would put the param inside the
+					 * <sip:...> URI brackets. */
 					int gt = line.lastIndexOf('>');
 					if (gt >= 0)
-						line.insert(gt, QString(";%1=%2").arg(key, val));
+						line.insert(gt + 1, QString(";%1=%2").arg(key, val));
 				}
 			}
 			modified = true;
+		}
+		lines << line;
+	}
+	f.close();
+
+	if (!modified)
+		return false;
+
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+		return false;
+	QTextStream out(&f);
+	for (const QString &l : lines)
+		out << l;
+	out.flush();
+	f.close();
+	return true;
+}
+
+
+/** Rewrite the domain part of the AOR in the (single) account line:
+ *  <sip:user@DOMAIN[:PORT];uri-params> — replaces the text between
+ *  '@' and the next ';' or '>', preserving the closing bracket.
+ *  Returns true on success.
+ */
+static bool updateAccountsDomain(const QString &domain)
+{
+	QString path = homeBaresip() + "/accounts";
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return false;
+
+	QStringList lines;
+	bool modified = false;
+	while (!f.atEnd()) {
+		QString line = QString::fromUtf8(f.readLine());
+		QString trimmed = line.trimmed();
+		if (!trimmed.startsWith('#') && !trimmed.isEmpty()
+		    && !modified) {
+			int lt = line.indexOf('<');
+			int at = line.indexOf('@', lt);
+			int gt = line.indexOf('>', at);
+			if (lt >= 0 && at > lt && gt > at) {
+				int end = gt;
+				int semi = line.indexOf(';', at);
+				if (semi >= 0 && semi < end)
+					end = semi;
+				line.replace(at + 1, end - at - 1, domain);
+				modified = true;
+			}
 		}
 		lines << line;
 	}
@@ -122,7 +181,6 @@ void SettingsDialog::buildUi()
 	authPass_    = new QLineEdit(accTab);
 	authPass_->setEchoMode(QLineEdit::Password);
 	sipDomain_   = new QLineEdit(accTab);
-	sipDomain_->setReadOnly(true);  /* AOR domain, set at startup */
 	regint_      = new QSpinBox(accTab);
 	regint_->setRange(0, 86400);
 	regint_->setSuffix(" s");
@@ -229,7 +287,15 @@ void SettingsDialog::loadSettings()
 	displayName_->setText(QString::fromUtf8(account_display_name(acc)));
 	authUser_->setText(QString::fromUtf8(account_auth_user(acc)));
 	authPass_->setText(QString::fromUtf8(account_auth_pass(acc)));
-	sipDomain_->setText(QString::fromUtf8(account_aor(acc)));
+	/* Show only the domain part of the AOR: strip the
+	 * "sip:user@" prefix and any ";params" suffix. */
+	QString aor = QString::fromUtf8(account_aor(acc));
+	int aorAt = aor.indexOf('@');
+	QString domain = (aorAt >= 0) ? aor.mid(aorAt + 1) : aor;
+	int aorSemi = domain.indexOf(';');
+	if (aorSemi >= 0)
+		domain = domain.left(aorSemi);
+	sipDomain_->setText(domain);
 	regint_->setValue(account_regint(acc));
 
 	stunHost_->setText(QString::fromUtf8(account_stun_host(acc)));
@@ -308,10 +374,13 @@ void SettingsDialog::saveSettings()
 		updates["auth_pass"] = authPass_->text();
 	updates["regint"] = QString::number(regint_->value());
 	if (!stunHost_->text().isEmpty()) {
-		QString ss = "stun:";
-		if (!stunUser_->text().isEmpty())
-			ss += stunUser_->text() + "@";
-		ss += stunHost_->text();
+		/* baresip expects "stun:[user@]host[:port]" — the '@'
+		 * is required even with no user (stun:@host). Strip a
+		 * leading '@' from the field so it can't double up. */
+		QString host = stunHost_->text();
+		if (host.startsWith('@'))
+			host = host.mid(1);
+		QString ss = "stun:" + stunUser_->text() + "@" + host;
 		if (stunPort_->value() != 3478)
 			ss += QString(":%1").arg(stunPort_->value());
 		updates["stunserver"] = ss;
@@ -327,6 +396,12 @@ void SettingsDialog::saveSettings()
 		updates["audio_codecs"] = audioCodecs_->text();
 
 	updateAccountsParams(updates);
+
+	/* The SIP domain lives inside the <sip:user@domain> AOR, not in
+	 * a ;param — update it separately (takes effect on restart,
+	 * since the AOR is the account's identity). */
+	if (!sipDomain_->text().isEmpty())
+		updateAccountsDomain(sipDomain_->text());
 
 	/* Audio device persistence: write to ~/.baresip/config. */
 	/* (Audio device changes via config require a restart; we
