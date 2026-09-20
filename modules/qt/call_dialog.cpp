@@ -20,8 +20,6 @@
 #include <QApplication>
 #include <QCursor>
 #include <QWindow>
-#include <QPainter>
-#include <QPainterPath>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
@@ -77,20 +75,13 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * WindowStaysOnTopHint keeps it above other application windows. */
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	/* Rounded corners: WA_TranslucentBackground may not work with
-	 * LayerShellQt on Wayland (compositor fills black). Instead, use
-	 * a solid background and paint rounded corners with the system
-	 * background colour outside the rounded rect. */
-	setAttribute(Qt::WA_NoSystemBackground);
+	/* Rounded corners via translucent background + stylesheet.
+	 * WA_TranslucentBackground lets the rounded corners show
+	 * through; the stylesheet rounds the top-level widget. */
+	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background: #13161b; border-radius: 12px; }"
-		"QLabel { background: transparent; color: #e0e0e0; }"
-		"QLineEdit { background-color: rgba(255,255,255,0.08);"
-		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
-		"            border-radius: 4px; }"
-		"QListWidget { background-color: rgba(255,255,255,0.04);"
-		"              color: #e0e0e0; border: none; }"
-		"QPushButton { color: #e0e0e0; }");
+		"QDialog { background-color: #13161b;"
+		"           border-radius: 12px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
 	buildUi();
@@ -110,16 +101,10 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
 		       Qt::WindowStaysOnTopHint);
-	setAttribute(Qt::WA_NoSystemBackground);
+	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
-		"QDialog { background: #13161b; border-radius: 12px; }"
-		"QLabel { background: transparent; color: #e0e0e0; }"
-		"QLineEdit { background-color: rgba(255,255,255,0.08);"
-		"            color: #e0e0e0; border: 1px solid rgba(255,255,255,0.15);"
-		"            border-radius: 4px; }"
-		"QListWidget { background-color: rgba(255,255,255,0.04);"
-		"              color: #e0e0e0; border: none; }"
-		"QPushButton { color: #e0e0e0; }");
+		"QDialog { background-color: #13161b;"
+		"           border-radius: 12px; }");
 	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
@@ -151,7 +136,7 @@ void CallDialog::setupLayerShell()
 	if (!ls)
 		return;
 
-	ls->setLayer(LayerShellQt::Window::LayerTop);
+	ls->setLayer(LayerShellQt::Window::LayerOverlay);
 	ls->setKeyboardInteractivity(
 		LayerShellQt::Window::KeyboardInteractivityOnDemand);
 	ls->setScope("baresip-call-panel");
@@ -289,9 +274,9 @@ void CallDialog::showPanel()
 				anchors = LayerShellQt::Window::Anchors(
 					LayerShellQt::Window::AnchorTop |
 					LayerShellQt::Window::AnchorRight);
-				marginT = 58;
+				marginT = 60;
 
-				marginR = 10;
+				marginR = 12;
 
 				ls->setAnchors(anchors);
 				ls->setMargins(QMargins(0, marginT, marginR, marginB));
