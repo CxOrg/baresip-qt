@@ -8,6 +8,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QListWidget>
@@ -314,24 +315,35 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 
 void CallDialog::buildUi()
 {
-	auto *layout = new QVBoxLayout(this);
+	/* Outer layout leaves a gap so the dialog's own styled
+	 * background/border shows as a frame around the panel. */
+	auto *outer = new QVBoxLayout(this);
+	outer->setContentsMargins(6, 6, 6, 6);
 
-	auto *label = new QLabel(this);
+	/* Inner panel behind the displayed elements — no custom
+	 * styling, it inherits the widget style (Qt6Curve). */
+	auto *panel = new QFrame(this);
+	panel->setAutoFillBackground(true);
+	outer->addWidget(panel);
+
+	auto *layout = new QVBoxLayout(panel);
+
+	auto *label = new QLabel(panel);
 	layout->addWidget(label);
 	label->setText("Enter SIP URI or number:");
 
-	uriEdit_ = new QLineEdit(this);
+	uriEdit_ = new QLineEdit(panel);
 	uriEdit_->setAlignment(Qt::AlignLeft);
 	layout->addWidget(uriEdit_);
 
 	/* In-call DTMF dialpad launcher (hidden unless InCall). */
-	dialpadBtn_ = new QPushButton("Dialpad...", this);
+	dialpadBtn_ = new QPushButton("Dialpad...", panel);
 	layout->addWidget(dialpadBtn_);
 	connect(dialpadBtn_, &QPushButton::clicked,
 		this, &CallDialog::onDialpad);
 
 	/* Call history list (shown only in Dialing state). */
-	historyList_ = new QListWidget(this);
+	historyList_ = new QListWidget(panel);
 	historyList_->setMaximumHeight(200);
 	historyList_->setMinimumHeight(60);
 	historyList_->setUniformItemSizes(true);
