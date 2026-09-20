@@ -646,6 +646,14 @@ void TrayApp::addHistory(QString uri, int callType, QString info)
 }
 
 
+void TrayApp::updateHistoryDuration(QString uri, uint duration)
+{
+	CallHistory::instance()->updateDuration(uri, duration);
+	if (idleCallDialog_)
+		idleCallDialog_->refreshHistory();
+}
+
+
 void TrayApp::showWarning(QString title, QString text)
 {
 	/* NB: baresip.h #defines "warning" as a logging macro, which

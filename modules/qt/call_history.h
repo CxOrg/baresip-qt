@@ -17,6 +17,7 @@ struct CallHistoryEntry {
 	int       type;   /* CALL_INCOMING / CALL_OUTGOING / CALL_MISSED / CALL_REJECTED */
 	QString   uri;
 	QString   info;   /* peer display name, may be empty */
+	uint32_t  duration = 0;  /* call duration in seconds (0 if not connected) */
 };
 
 class CallHistory : public QObject {
@@ -27,6 +28,9 @@ public:
 
 	/** Append an entry and persist to disk. */
 	void add(const QString &uri, int type, const QString &info);
+
+	/** Update the duration of the most recent entry matching `uri`. */
+	void updateDuration(const QString &uri, uint32_t duration);
 
 	/** Load the most recent `n` entries from disk. */
 	QList<CallHistoryEntry> recent(int n) const;

@@ -35,6 +35,7 @@ public slots:
 			 QString peerUri, QString peerName);
 	void callEstablished(quintptr callPtr);
 	void addHistory(QString uri, int callType, QString info);
+	void updateHistoryDuration(QString uri, uint duration);
 	void showWarning(QString title, QString text);
 
 private slots:

@@ -481,11 +481,26 @@ void CallDialog::refreshHistory()
 			break;
 		}
 
-		QString label = e.info.isEmpty()
-			? QString("%1  %2").arg(e.uri,
-				e.ts.toString("MM-dd hh:mm"))
-			: QString("%1  %2").arg(e.info,
-				e.ts.toString("MM-dd hh:mm"));
+		QString label;
+		if (e.duration > 0) {
+			/* Format duration as M:SS */
+			int mins = e.duration / 60;
+			int secs = e.duration % 60;
+			QString dur = QString("%1:%2")
+				.arg(mins)
+				.arg(secs, 2, 10, QChar('0'));
+			label = e.info.isEmpty()
+				? QString("%1  (%3)  %2").arg(e.uri,
+					e.ts.toString("MM-dd hh:mm"), dur)
+				: QString("%1  (%3)  %2").arg(e.info,
+					e.ts.toString("MM-dd hh:mm"), dur);
+		} else {
+			label = e.info.isEmpty()
+				? QString("%1  %2").arg(e.uri,
+					e.ts.toString("MM-dd hh:mm"))
+				: QString("%1  %2").arg(e.info,
+					e.ts.toString("MM-dd hh:mm"));
+		}
 
 		auto *item = new QListWidgetItem(label);
 		QIcon ic = QIcon::fromTheme(iconName);

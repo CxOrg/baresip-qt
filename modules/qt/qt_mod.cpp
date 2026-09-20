@@ -144,6 +144,20 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 			&& call_state(call) != CALL_STATE_TERMINATED
 			&& call_state(call) != CALL_STATE_ESTABLISHED;
 
+		/* Update the call history with the actual duration
+		 * for connected calls. */
+		if (!missed) {
+			uint32_t dur = call_duration(call);
+			if (dur > 0) {
+				QMetaObject::invokeMethod(mod->tray,
+					"updateHistoryDuration",
+					Qt::QueuedConnection,
+					Q_ARG(QString,
+						uriToNumber(call_peeruri(call))),
+					Q_ARG(uint, dur));
+			}
+		}
+
 		QMetaObject::invokeMethod(mod->tray, "callClosed",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),

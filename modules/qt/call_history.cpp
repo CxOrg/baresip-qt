@@ -53,11 +53,12 @@ void CallHistory::load()
 		if (line.isEmpty())
 			continue;
 
-		/* CSV: ts,type,uri,info  (info may contain commas -> we
-		 * split only on the first 3 commas; the rest is info). */
+		/* CSV: ts,type,uri,info,duration
+		 * (info may contain commas -> we split only on the first
+		 * 4 commas; the rest is info). */
 		QStringList parts;
 		int idx = 0;
-		for (int i = 0; i < 3; ++i) {
+		for (int i = 0; i < 4; ++i) {
 			int comma = line.indexOf(',', idx);
 			if (comma < 0) {
 				parts.clear();
@@ -68,14 +69,15 @@ void CallHistory::load()
 		}
 		parts << line.mid(idx);
 
-		if (parts.size() < 3)
+		if (parts.size() < 4)
 			continue;
 
 		CallHistoryEntry e;
 		e.ts   = QDateTime::fromString(parts[0], Qt::ISODate);
 		e.type = parts[1].toInt();
 		e.uri  = parts[2];
-		e.info = parts.size() > 3 ? parts[3] : QString();
+		e.info = parts[3];
+		e.duration = parts.size() > 4 ? parts[4].toUInt() : 0;
 
 		/* Unescape commas in info. */
 		e.info.replace("\\,", ",");
@@ -102,7 +104,8 @@ void CallHistory::save() const
 		out << e.ts.toString(Qt::ISODate) << ","
 		    << e.type << ","
 		    << e.uri << ","
-		    << info << "\n";
+		    << info << ","
+		    << e.duration << "\n";
 	}
 
 	out.flush();
@@ -117,6 +120,7 @@ void CallHistory::add(const QString &uri, int type, const QString &info)
 	e.type = type;
 	e.uri  = uri;
 	e.info = info;
+	e.duration = 0;
 
 	entries_.append(e);
 
@@ -126,6 +130,21 @@ void CallHistory::add(const QString &uri, int type, const QString &info)
 
 	save();
 	emit changed();
+}
+
+
+void CallHistory::updateDuration(const QString &uri, uint32_t duration)
+{
+	/* Find the most recent entry matching this URI and update
+	 * its duration. Searches backwards from the end. */
+	for (int i = entries_.size() - 1; i >= 0; --i) {
+		if (entries_[i].uri == uri) {
+			entries_[i].duration = duration;
+			save();
+			emit changed();
+			return;
+		}
+	}
 }
 
 
