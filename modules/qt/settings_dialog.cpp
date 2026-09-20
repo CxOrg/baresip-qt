@@ -280,7 +280,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 	setAttribute(Qt::WA_DeleteOnClose, false);
 	buildUi();
 	loadSettings();
-	resize(420, 480);
+	resize(470, 480);
 	setupLayerShell();
 }
 
