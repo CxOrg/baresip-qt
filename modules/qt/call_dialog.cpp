@@ -80,6 +80,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * rounded corners — alpha blends over the Plasma panel. */
 	setStyleSheet(
 		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"          border: 2px solid #13161b;"
 		"          border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -103,6 +104,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QDialog { background-color: rgba(19, 22, 27, 128);"
+		"          border: 2px solid #13161b;"
 		"          border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
