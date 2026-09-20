@@ -18,10 +18,13 @@
 #include <QHash>
 #include <QDBusObjectPath>
 #include <QDBusArgument>
+#include <QDBusAbstractAdaptor>
 #include <QVariantMap>
 
 class QMenu;
 class QAction;
+class StatusNotifierItem;
+class DBusMenu;
 
 /* ---- DBusMenu layout types (com.canonical.dbusmenu) -------------- */
 
@@ -127,12 +130,6 @@ Q_DECLARE_METATYPE(IconPixmapList)
 
 class DBusMenu : public QObject {
 	Q_OBJECT
-	Q_CLASSINFO("D-Bus Interface", "com.canonical.dbusmenu")
-
-	Q_PROPERTY(uint Version READ version CONSTANT)
-	Q_PROPERTY(QString TextDirection READ textDirection CONSTANT)
-	Q_PROPERTY(QString Status READ status CONSTANT)
-	Q_PROPERTY(QStringList IconThemePath READ iconThemePath CONSTANT)
 
 public:
 	explicit DBusMenu(QMenu *menu, QObject *parent = nullptr);
@@ -146,21 +143,22 @@ public:
 	int idForAction(QAction *act) const;
 	QAction *actionForId(int id) const;
 
-public slots:
-	/* D-Bus methods (com.canonical.dbusmenu) */
-	uint GetLayout(int parentId, int recursionDepth,
+	/* D-Bus methods (com.canonical.dbusmenu) -- called by adaptor */
+	uint getLayout(int parentId, int recursionDepth,
 		       const QStringList &propertyNames,
 		       DBusMenuLayoutItem &layout);
-	QList<DBusMenuItem> GetGroupProperties(const QList<int> &ids,
+	QList<DBusMenuItem> getGroupProperties(const QList<int> &ids,
 					       const QStringList &propertyNames);
-	QVariant GetProperty(int id, const QString &name);
-	void Event(int id, const QString &eventId, const QVariant &data,
+	QVariant getProperty(int id, const QString &name);
+	void event(int id, const QString &eventId, const QVariant &data,
 		   uint timestamp);
-	QList<int> EventGroup(const QList<int> &ids, const QString &eventId,
+	QList<int> eventGroup(const QList<int> &ids, const QString &eventId,
 			      const QList<QVariant> &data, uint timestamp);
-	bool AboutToShow(int id);
-	QList<int> AboutToShowGroup(const QList<int> &ids,
+	bool aboutToShow(int id);
+	QList<int> aboutToShowGroup(const QList<int> &ids,
 				    QList<bool> &needUpdates);
+
+	void emitLayoutUpdated();
 
 signals:
 	void ItemsPropertiesUpdated(
@@ -185,25 +183,118 @@ private:
 };
 
 
+/* ---- DBusMenu Adaptor -------------------------------------------- */
+
+class DBusMenuAdaptor : public QDBusAbstractAdaptor {
+	Q_OBJECT
+	Q_CLASSINFO("D-Bus Interface", "com.canonical.dbusmenu")
+	Q_CLASSINFO("D-Bus Introspection", ""
+"  <interface name=\"com.canonical.dbusmenu\">\n"
+"    <property access=\"read\" type=\"u\" name=\"Version\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"TextDirection\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"Status\"/>\n"
+"    <property access=\"read\" type=\"as\" name=\"IconThemePath\"/>\n"
+"    <method name=\"GetLayout\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"parentId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"recursionDepth\"/>\n"
+"      <arg direction=\"in\" type=\"as\" name=\"propertyNames\"/>\n"
+"      <arg direction=\"out\" type=\"u\" name=\"revision\"/>\n"
+"      <arg direction=\"out\" type=\"(ia{sv}av)\" name=\"layout\"/>\n"
+"    </method>\n"
+"    <method name=\"GetGroupProperties\">\n"
+"      <arg direction=\"in\" type=\"ai\" name=\"ids\"/>\n"
+"      <arg direction=\"in\" type=\"as\" name=\"propertyNames\"/>\n"
+"      <arg direction=\"out\" type=\"a(ia{sv})\" name=\"properties\"/>\n"
+"    </method>\n"
+"    <method name=\"GetProperty\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"id\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"name\"/>\n"
+"      <arg direction=\"out\" type=\"v\" name=\"value\"/>\n"
+"    </method>\n"
+"    <method name=\"Event\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"id\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"eventId\"/>\n"
+"      <arg direction=\"in\" type=\"v\" name=\"data\"/>\n"
+"      <arg direction=\"in\" type=\"u\" name=\"timestamp\"/>\n"
+"    </method>\n"
+"    <method name=\"EventGroup\">\n"
+"      <arg direction=\"in\" type=\"ai\" name=\"ids\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"eventId\"/>\n"
+"      <arg direction=\"in\" type=\"av\" name=\"data\"/>\n"
+"      <arg direction=\"in\" type=\"u\" name=\"timestamp\"/>\n"
+"      <arg direction=\"out\" type=\"ai\" name=\"errors\"/>\n"
+"    </method>\n"
+"    <method name=\"AboutToShow\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"id\"/>\n"
+"      <arg direction=\"out\" type=\"b\" name=\"needUpdate\"/>\n"
+"    </method>\n"
+"    <method name=\"AboutToShowGroup\">\n"
+"      <arg direction=\"in\" type=\"ai\" name=\"ids\"/>\n"
+"      <arg direction=\"out\" type=\"ai\" name=\"idErrors\"/>\n"
+"      <arg direction=\"out\" type=\"ab\" name=\"updatesNeeded\"/>\n"
+"    </method>\n"
+"    <signal name=\"ItemsPropertiesUpdated\">\n"
+"      <arg direction=\"out\" type=\"a(ia{sv})\" name=\"updated\"/>\n"
+"      <arg direction=\"out\" type=\"a(ias)\" name=\"removed\"/>\n"
+"    </signal>\n"
+"    <signal name=\"LayoutUpdated\">\n"
+"      <arg direction=\"out\" type=\"u\" name=\"revision\"/>\n"
+"      <arg direction=\"out\" type=\"i\" name=\"parent\"/>\n"
+"    </signal>\n"
+"  </interface>\n"
+"")
+
+public:
+	explicit DBusMenuAdaptor(DBusMenu *menu) : QDBusAbstractAdaptor(menu), m_menu(menu) {}
+
+	uint Version() const { return m_menu->version(); }
+	QString TextDirection() const { return m_menu->textDirection(); }
+	QString Status() const { return m_menu->status(); }
+	QStringList IconThemePath() const { return m_menu->iconThemePath(); }
+
+public slots:
+	uint GetLayout(int parentId, int recursionDepth,
+		       const QStringList &propertyNames,
+		       DBusMenuLayoutItem &layout) {
+		return m_menu->getLayout(parentId, recursionDepth,
+					 propertyNames, layout);
+	}
+	QList<DBusMenuItem> GetGroupProperties(const QList<int> &ids,
+					      const QStringList &propertyNames) {
+		return m_menu->getGroupProperties(ids, propertyNames);
+	}
+	QVariant GetProperty(int id, const QString &name) {
+		return m_menu->getProperty(id, name);
+	}
+	void Event(int id, const QString &eventId, const QVariant &data,
+		   uint timestamp) {
+		m_menu->event(id, eventId, data, timestamp);
+	}
+	QList<int> EventGroup(const QList<int> &ids, const QString &eventId,
+			      const QList<QVariant> &data, uint timestamp) {
+		return m_menu->eventGroup(ids, eventId, data, timestamp);
+	}
+	bool AboutToShow(int id) { return m_menu->aboutToShow(id); }
+	QList<int> AboutToShowGroup(const QList<int> &ids,
+				    QList<bool> &needUpdates) {
+		return m_menu->aboutToShowGroup(ids, needUpdates);
+	}
+
+signals:
+	void ItemsPropertiesUpdated(
+		const QList<DBusMenuItem> &updated,
+		const QList<DBusMenuItem> &removed);
+	void LayoutUpdated(uint revision, int parent);
+
+private:
+	DBusMenu *m_menu;
+};
+
+
 /* ---- StatusNotifierItem ------------------------------------------ */
 
 class StatusNotifierItem : public QObject {
 	Q_OBJECT
-	Q_CLASSINFO("D-Bus Interface", "org.kde.StatusNotifierItem")
-
-	Q_PROPERTY(QString Id READ id CONSTANT)
-	Q_PROPERTY(QString Title READ title NOTIFY titleChanged)
-	Q_PROPERTY(QString Status READ status NOTIFY statusChanged)
-	Q_PROPERTY(QString Category READ category CONSTANT)
-	Q_PROPERTY(QString IconName READ iconName NOTIFY iconChanged)
-	Q_PROPERTY(QString IconThemePath READ iconThemePath CONSTANT)
-	Q_PROPERTY(IconPixmapList IconPixmap READ iconPixmap NOTIFY iconChanged)
-	Q_PROPERTY(QString AttentionIconName READ attentionIconName NOTIFY iconChanged)
-	Q_PROPERTY(IconPixmapList AttentionIconPixmap READ attentionIconPixmap NOTIFY iconChanged)
-	Q_PROPERTY(QString IconAccessibleDesc READ iconAccessibleDesc CONSTANT)
-	Q_PROPERTY(QString AttentionAccessibleDesc READ attentionAccessibleDesc CONSTANT)
-	Q_PROPERTY(QDBusObjectPath Menu READ menuPath CONSTANT)
-	Q_PROPERTY(QString ToolTip READ toolTipString NOTIFY titleChanged)
 
 public:
 	explicit StatusNotifierItem(QObject *parent = nullptr);
@@ -243,12 +334,12 @@ signals:
 	/* Emitted when Plasma calls ContextMenu(x, y) -- right-click. */
 	void contextMenuRequested(int x, int y);
 
-	/* SNI property-change signals */
+	/* SNI property-change signals (for the adaptor) */
 	void titleChanged();
 	void statusChanged(const QString &status);
 	void iconChanged();
 
-	/* SNI notification signals */
+	/* SNI notification signals (for the adaptor) */
 	void NewIcon();
 	void NewAttentionIcon();
 	void NewTitle();
@@ -271,4 +362,88 @@ private:
 	QIcon m_icon;
 	DBusMenu *m_dbusMenu = nullptr;
 	bool m_registered = false;
+};
+
+
+/* ---- StatusNotifierItem Adaptor --------------------------------- */
+
+class StatusNotifierItemAdaptor : public QDBusAbstractAdaptor {
+	Q_OBJECT
+	Q_CLASSINFO("D-Bus Interface", "org.kde.StatusNotifierItem")
+	Q_CLASSINFO("D-Bus Introspection", ""
+"  <interface name=\"org.kde.StatusNotifierItem\">\n"
+"    <property access=\"read\" type=\"s\" name=\"Id\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"Title\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"Status\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"Category\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"IconName\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"IconThemePath\"/>\n"
+"    <property access=\"read\" type=\"a(iiay)\" name=\"IconPixmap\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"AttentionIconName\"/>\n"
+"    <property access=\"read\" type=\"a(iiay)\" name=\"AttentionIconPixmap\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"IconAccessibleDesc\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"AttentionAccessibleDesc\"/>\n"
+"    <property access=\"read\" type=\"o\" name=\"Menu\"/>\n"
+"    <property access=\"read\" type=\"s\" name=\"ToolTip\"/>\n"
+"    <method name=\"ContextMenu\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"x\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"y\"/>\n"
+"    </method>\n"
+"    <method name=\"Activate\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"x\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"y\"/>\n"
+"    </method>\n"
+"    <method name=\"SecondaryActivate\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"x\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"y\"/>\n"
+"    </method>\n"
+"    <method name=\"Scroll\">\n"
+"      <arg direction=\"in\" type=\"i\" name=\"delta\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"orientation\"/>\n"
+"    </method>\n"
+"    <signal name=\"NewIcon\"/>\n"
+"    <signal name=\"NewAttentionIcon\"/>\n"
+"    <signal name=\"NewTitle\"/>\n"
+"    <signal name=\"NewToolTip\"/>\n"
+"    <signal name=\"NewStatus\">\n"
+"      <arg direction=\"out\" type=\"s\" name=\"status\"/>\n"
+"    </signal>\n"
+"  </interface>\n"
+"")
+
+public:
+	explicit StatusNotifierItemAdaptor(StatusNotifierItem *item)
+		: QDBusAbstractAdaptor(item), m_item(item) {}
+
+	QString Id() const { return m_item->id(); }
+	QString Title() const { return m_item->title(); }
+	QString Status() const { return m_item->status(); }
+	QString Category() const { return m_item->category(); }
+	QString IconName() const { return m_item->iconName(); }
+	QString IconThemePath() const { return m_item->iconThemePath(); }
+	IconPixmapList IconPixmap() const { return m_item->iconPixmap(); }
+	QString AttentionIconName() const { return m_item->attentionIconName(); }
+	IconPixmapList AttentionIconPixmap() const { return m_item->attentionIconPixmap(); }
+	QString IconAccessibleDesc() const { return m_item->iconAccessibleDesc(); }
+	QString AttentionAccessibleDesc() const { return m_item->attentionAccessibleDesc(); }
+	QDBusObjectPath Menu() const { return m_item->menuPath(); }
+	QString ToolTip() const { return m_item->toolTipString(); }
+
+public slots:
+	void ContextMenu(int x, int y) { m_item->ContextMenu(x, y); }
+	void Activate(int x, int y) { m_item->Activate(x, y); }
+	void SecondaryActivate(int x, int y) { m_item->SecondaryActivate(x, y); }
+	void Scroll(int delta, const QString &orientation) {
+		m_item->Scroll(delta, orientation);
+	}
+
+signals:
+	void NewIcon();
+	void NewAttentionIcon();
+	void NewTitle();
+	void NewToolTip();
+	void NewStatus(const QString &status);
+
+private:
+	StatusNotifierItem *m_item;
 };

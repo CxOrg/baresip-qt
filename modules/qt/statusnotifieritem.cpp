@@ -49,8 +49,7 @@ DBusMenu::DBusMenu(QMenu *menu, QObject *parent)
 	/* When the menu structure changes, rebuild the ID map and
 	 * notify Plasma that the layout changed. */
 	connect(menu_, &QMenu::aboutToShow, this, [this]() {
-		rebuildIdMap();
-		emit LayoutUpdated(++revision_, 0);
+		emitLayoutUpdated();
 	});
 }
 
@@ -157,7 +156,7 @@ void DBusMenu::populateLayoutItem(DBusMenuLayoutItem &item, QAction *act,
 }
 
 
-uint DBusMenu::GetLayout(int parentId, int recursionDepth,
+uint DBusMenu::getLayout(int parentId, int recursionDepth,
 			 const QStringList &propertyNames,
 			 DBusMenuLayoutItem &layout)
 {
@@ -194,7 +193,7 @@ uint DBusMenu::GetLayout(int parentId, int recursionDepth,
 }
 
 
-QList<DBusMenuItem> DBusMenu::GetGroupProperties(const QList<int> &ids,
+QList<DBusMenuItem> DBusMenu::getGroupProperties(const QList<int> &ids,
 						  const QStringList &propertyNames)
 {
 	QList<DBusMenuItem> result;
@@ -211,7 +210,7 @@ QList<DBusMenuItem> DBusMenu::GetGroupProperties(const QList<int> &ids,
 }
 
 
-QVariant DBusMenu::GetProperty(int id, const QString &name)
+QVariant DBusMenu::getProperty(int id, const QString &name)
 {
 	QAction *act = actionForId(id);
 	if (!act)
@@ -220,7 +219,7 @@ QVariant DBusMenu::GetProperty(int id, const QString &name)
 }
 
 
-void DBusMenu::Event(int id, const QString &eventId, const QVariant &data,
+void DBusMenu::event(int id, const QString &eventId, const QVariant &data,
 		     uint timestamp)
 {
 	Q_UNUSED(data)
@@ -236,7 +235,7 @@ void DBusMenu::Event(int id, const QString &eventId, const QVariant &data,
 }
 
 
-QList<int> DBusMenu::EventGroup(const QList<int> &ids,
+QList<int> DBusMenu::eventGroup(const QList<int> &ids,
 				const QString &eventId,
 				const QList<QVariant> &data,
 				uint timestamp)
@@ -254,14 +253,14 @@ QList<int> DBusMenu::EventGroup(const QList<int> &ids,
 				act->trigger();
 			}
 		} else {
-			Event(id, eventId, d, timestamp);
+			event(id, eventId, d, timestamp);
 		}
 	}
 	return errors;
 }
 
 
-bool DBusMenu::AboutToShow(int id)
+bool DBusMenu::aboutToShow(int id)
 {
 	Q_UNUSED(id)
 	rebuildIdMap();
@@ -269,7 +268,7 @@ bool DBusMenu::AboutToShow(int id)
 }
 
 
-QList<int> DBusMenu::AboutToShowGroup(const QList<int> &ids,
+QList<int> DBusMenu::aboutToShowGroup(const QList<int> &ids,
 				      QList<bool> &needUpdates)
 {
 	QList<int> errors;
@@ -277,6 +276,12 @@ QList<int> DBusMenu::AboutToShowGroup(const QList<int> &ids,
 		needUpdates.append(false);
 	}
 	return errors;
+}
+
+
+void DBusMenu::emitLayoutUpdated()
+{
+	emit LayoutUpdated(++revision_, 0);
 }
 
 
@@ -322,14 +327,34 @@ bool StatusNotifierItem::registerOnBus()
 		return false;
 	}
 
+	/* Create the SNI adaptor (must exist before registering the
+	 * object so Qt introspects the adaptor's meta-object). */
+	auto *sniAdaptor = new StatusNotifierItemAdaptor(this);
+	/* Forward our internal signals to the adaptor's D-Bus signals. */
+	connect(this, &StatusNotifierItem::NewIcon,
+		sniAdaptor, &StatusNotifierItemAdaptor::NewIcon);
+	connect(this, &StatusNotifierItem::NewAttentionIcon,
+		sniAdaptor, &StatusNotifierItemAdaptor::NewAttentionIcon);
+	connect(this, &StatusNotifierItem::NewTitle,
+		sniAdaptor, &StatusNotifierItemAdaptor::NewTitle);
+	connect(this, &StatusNotifierItem::NewToolTip,
+		sniAdaptor, &StatusNotifierItemAdaptor::NewToolTip);
+	connect(this, &StatusNotifierItem::NewStatus,
+		sniAdaptor, &StatusNotifierItemAdaptor::NewStatus);
+
 	if (!bus.registerObject("/StatusNotifierItem", this)) {
 		qWarning() << "SNI: failed to register object:"
 			   << bus.lastError().message();
 		return false;
 	}
 
-	/* Register the DBusMenu object at /MenuBar. */
+	/* Register the DBusMenu object at /MenuBar with its adaptor. */
 	if (m_dbusMenu) {
+		auto *menuAdaptor = new DBusMenuAdaptor(m_dbusMenu);
+		connect(m_dbusMenu, &DBusMenu::LayoutUpdated,
+			menuAdaptor, &DBusMenuAdaptor::LayoutUpdated);
+		connect(m_dbusMenu, &DBusMenu::ItemsPropertiesUpdated,
+			menuAdaptor, &DBusMenuAdaptor::ItemsPropertiesUpdated);
 		if (!bus.registerObject("/MenuBar", m_dbusMenu)) {
 			qWarning() << "SNI: failed to register menu object:"
 				   << bus.lastError().message();
