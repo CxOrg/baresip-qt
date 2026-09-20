@@ -51,7 +51,7 @@ private slots:
 	void onContacts();
 	void onQuit();
 	void onAccountToggled(QAction *action);
-	void onStatusToggled(QAction *action);
+	void onPresenceToggled();
 	void onDialContact(QAction *action);
 	void onDialHistory(QAction *action);
 	void onAnswer(quintptr callPtr);
@@ -80,11 +80,11 @@ private:
 	QSystemTrayIcon *trayIcon_ = nullptr;
 	QMenu *menu_ = nullptr;
 	QMenu *accountsMenu_ = nullptr;
-	QMenu *statusMenu_ = nullptr;
 	QMenu *contactsMenu_ = nullptr;
 	QMenu *historyMenu_ = nullptr;
+	QAction *presenceAct_ = nullptr;
 	QActionGroup *accountsGroup_ = nullptr;
-	QActionGroup *statusGroup_ = nullptr;
+	bool presenceOpen_ = true;
 
 	/* Unified call-control dialog. One per active call (keyed by
 	 * call pointer), plus a singleton for the idle "Dial" state. */

@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QIcon>
+#include <QPainter>
 #include <QDateTime>
 #include <QApplication>
 #include <QCursor>
@@ -70,62 +71,72 @@ void TrayApp::refreshTrayMenu()
 }
 
 
+/** Small filled-circle icon used as the presence status spot. */
+static QIcon spotIcon(const QColor &color)
+{
+	QPixmap pm(12, 12);
+	pm.fill(Qt::transparent);
+	QPainter p(&pm);
+	p.setRenderHint(QPainter::Antialiasing);
+	p.setPen(Qt::NoPen);
+	p.setBrush(color);
+	p.drawEllipse(1, 1, 10, 10);
+	return QIcon(pm);
+}
+
+
 void TrayApp::buildMenu()
 {
 	menu_ = new QMenu();
 
-	/* Account submenu */
-	accountsMenu_ = menu_->addMenu("Account");
+	/* User Presence: a single toggle with a green/red spot. */
+	presenceAct_ = menu_->addAction("User Presence");
+	connect(presenceAct_, &QAction::triggered,
+		this, &TrayApp::onPresenceToggled);
+	/* Initialise from the first account's current presence. */
+	struct le *le = list_head(uag_list());
+	if (le) {
+		struct ua *ua = static_cast<struct ua *>(le->data);
+		presenceOpen_ =
+			ua_presence_status(ua) == PRESENCE_OPEN;
+	}
+	presenceAct_->setIcon(spotIcon(presenceOpen_
+		? QColor("#4caf50") : QColor("#e53935")));
+
+	/* Online accounts submenu */
+	accountsMenu_ = menu_->addMenu("Online Accounts");
 	accountsGroup_ = new QActionGroup(this);
 	accountsGroup_->setExclusive(true);
 	connect(accountsGroup_, &QActionGroup::triggered,
 		this, &TrayApp::onAccountToggled);
 	populateAccounts();
 
-	/* Status submenu */
-	statusMenu_ = menu_->addMenu("Status");
-	statusGroup_ = new QActionGroup(this);
-	statusGroup_->setExclusive(true);
-	connect(statusGroup_, &QActionGroup::triggered,
-		this, &TrayApp::onStatusToggled);
-
-	QAction *openAct = statusMenu_->addAction("Open");
-	openAct->setCheckable(true);
-	openAct->setChecked(true);
-	openAct->setData(static_cast<int>(PRESENCE_OPEN));
-	statusGroup_->addAction(openAct);
-
-	QAction *closedAct = statusMenu_->addAction("Closed");
-	closedAct->setCheckable(true);
-	closedAct->setData(static_cast<int>(PRESENCE_CLOSED));
-	statusGroup_->addAction(closedAct);
-
 	menu_->addSeparator();
 
 	/* Dial */
-	QAction *dialAct = menu_->addAction("Dial...");
+	QAction *dialAct = menu_->addAction("Call/Dial ...");
 	connect(dialAct, &QAction::triggered, this, &TrayApp::onDial);
 
-	/* Dial contact */
-	contactsMenu_ = menu_->addMenu("Dial contact");
-	populateContacts();
-
-	/* Contacts editor */
-	QAction *contactsAct = menu_->addAction("Contacts...");
-	connect(contactsAct, &QAction::triggered,
-		this, &TrayApp::onContacts);
-
 	/* Call history */
-	historyMenu_ = menu_->addMenu("Call history");
+	historyMenu_ = menu_->addMenu("Call History");
 	populateHistoryMenu();
+
+	/* Dial contact */
+	contactsMenu_ = menu_->addMenu("Call Contact");
+	populateContacts();
 
 	menu_->addSeparator();
 
-	QAction *aboutAct = menu_->addAction("About");
-	connect(aboutAct, &QAction::triggered, this, &TrayApp::onAbout);
+	/* Contacts editor */
+	QAction *contactsAct = menu_->addAction("Contacts ...");
+	connect(contactsAct, &QAction::triggered,
+		this, &TrayApp::onContacts);
 
-	QAction *settingsAct = menu_->addAction("Settings...");
+	QAction *settingsAct = menu_->addAction("Settings ...");
 	connect(settingsAct, &QAction::triggered, this, &TrayApp::onSettings);
+
+	QAction *aboutAct = menu_->addAction("About ...");
+	connect(aboutAct, &QAction::triggered, this, &TrayApp::onAbout);
 
 	menu_->addSeparator();
 
@@ -323,19 +334,21 @@ void TrayApp::onAccountToggled(QAction *action)
 }
 
 
-void TrayApp::onStatusToggled(QAction *action)
+void TrayApp::onPresenceToggled()
 {
-	if (!action->isChecked())
-		return;
+	presenceOpen_ = !presenceOpen_;
 
 	enum presence_status status =
-		static_cast<enum presence_status>(action->data().toInt());
+		presenceOpen_ ? PRESENCE_OPEN : PRESENCE_CLOSED;
 
 	struct le *le;
 	for (le = list_head(uag_list()); le; le = le->next) {
 		struct ua *ua = static_cast<struct ua *>(le->data);
 		ua_presence_status_set(ua, status);
 	}
+
+	presenceAct_->setIcon(spotIcon(presenceOpen_
+		? QColor("#4caf50") : QColor("#e53935")));
 }
 
 
