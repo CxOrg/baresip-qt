@@ -17,6 +17,8 @@
 #include <QIcon>
 #include <QHash>
 #include <QDBusObjectPath>
+#include <QDBusArgument>
+#include <QVariantMap>
 
 class QMenu;
 class QAction;
@@ -41,6 +43,55 @@ struct DBusMenuLayoutItem {
 	QList<QVariant> children;  /* each is QDBusVariant wrapping DBusMenuLayoutItem */
 };
 Q_DECLARE_METATYPE(DBusMenuLayoutItem)
+
+/* QDBusArgument streaming operators (required by qDBusRegisterMetaType) */
+inline QDBusArgument &operator<<(QDBusArgument &arg, const DBusMenuItem &item)
+{
+	arg.beginStructure();
+	arg << item.id << item.properties;
+	arg.endStructure();
+	return arg;
+}
+
+inline const QDBusArgument &operator>>(const QDBusArgument &arg, DBusMenuItem &item)
+{
+	arg.beginStructure();
+	arg >> item.id >> item.properties;
+	arg.endStructure();
+	return arg;
+}
+
+inline QDBusArgument &operator<<(QDBusArgument &arg, const DBusMenuItemKeys &keys)
+{
+	arg.beginStructure();
+	arg << keys.id << keys.properties;
+	arg.endStructure();
+	return arg;
+}
+
+inline const QDBusArgument &operator>>(const QDBusArgument &arg, DBusMenuItemKeys &keys)
+{
+	arg.beginStructure();
+	arg >> keys.id >> keys.properties;
+	arg.endStructure();
+	return arg;
+}
+
+inline QDBusArgument &operator<<(QDBusArgument &arg, const DBusMenuLayoutItem &item)
+{
+	arg.beginStructure();
+	arg << item.id << item.properties << item.children;
+	arg.endStructure();
+	return arg;
+}
+
+inline const QDBusArgument &operator>>(const QDBusArgument &arg, DBusMenuLayoutItem &item)
+{
+	arg.beginStructure();
+	arg >> item.id >> item.properties >> item.children;
+	arg.endStructure();
+	return arg;
+}
 
 
 /* ---- DBusMenu server -------------------------------------------- */
