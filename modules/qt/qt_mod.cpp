@@ -14,6 +14,9 @@
 #include <QApplication>
 #include <QMetaObject>
 #include <QString>
+#include <QFile>
+#include <QDir>
+#include <QList>
 #ifdef HAVE_KSTYLE
 #include <kstylemanager.h>
 #endif
@@ -64,12 +67,21 @@ static void event_handler(enum bevent_ev ev, struct bevent *event,
 
 struct ua *qt_current_ua(void)
 {
-	if (!qt_mod_obj.ua_cur)
-		qt_mod_obj.ua_cur =
-			static_cast<struct ua *>(list_ledata(
-						list_head(uag_list())));
+	if (qt_mod_obj.ua_cur)
+		return qt_mod_obj.ua_cur;
 
-	return qt_mod_obj.ua_cur;
+	/* No explicit selection (Account submenu): prefer a registered
+	 * UA so disabled accounts aren't used for dialing. Not cached —
+	 * registration state changes at runtime. */
+	struct le *le;
+	for (le = list_head(uag_list()); le; le = le->next) {
+		struct ua *ua = static_cast<struct ua *>(le->data);
+		if (ua_isregistered(ua))
+			return ua;
+	}
+
+	return static_cast<struct ua *>(list_ledata(
+					list_head(uag_list())));
 }
 
 
@@ -275,6 +287,14 @@ static void mqueue_handler(int id, void *data, void *arg)
 	case MQ_SELECT_UA:
 		qt_mod_obj.ua_cur = static_cast<struct ua *>(data);
 		break;
+
+	case MQ_REGISTER:
+		ua_register(static_cast<struct ua *>(data));
+		break;
+
+	case MQ_UNREGISTER:
+		ua_unregister(static_cast<struct ua *>(data));
+		break;
 	}
 }
 
@@ -311,6 +331,18 @@ void qt_mod_hangup(struct call *call)
 void qt_mod_select_ua(struct ua *ua)
 {
 	mqueue_push(qt_mod_obj.mq, MQ_SELECT_UA, ua);
+}
+
+
+void qt_mod_register(struct ua *ua)
+{
+	mqueue_push(qt_mod_obj.mq, MQ_REGISTER, ua);
+}
+
+
+void qt_mod_unregister(struct ua *ua)
+{
+	mqueue_push(qt_mod_obj.mq, MQ_UNREGISTER, ua);
 }
 
 
@@ -364,12 +396,48 @@ static int qt_thread(void *arg)
 }
 
 
+/** Unregister accounts marked ";enabled=no" in ~/.baresip/accounts.
+ *  Runs at module_init — ua_init has already populated uag_list, so
+ *  the Nth non-comment line maps to the Nth UA. Disabled accounts stay
+ *  loaded (visible in the settings panel) but never connect.
+ */
+static void apply_enabled_accounts(void)
+{
+	QFile f(QDir::homePath() + "/.baresip/accounts");
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return;
+
+	QList<bool> enabled;
+	while (!f.atEnd()) {
+		QString line = QString::fromUtf8(f.readLine());
+		QString t = line.trimmed();
+		if (t.isEmpty() || t.startsWith('#'))
+			continue;
+		enabled.append(!line.contains(";enabled=no"));
+	}
+	f.close();
+
+	int i = 0;
+	struct le *le;
+	for (le = list_head(uag_list()); le; le = le->next, ++i) {
+		struct ua *ua = static_cast<struct ua *>(le->data);
+		if (i < enabled.size() && !enabled[i]) {
+			BS_INFO("qt: account %d disabled, "
+				"not registering\n", i + 1);
+			ua_unregister(ua);
+		}
+	}
+}
+
+
 static int module_init(void)
 {
 	int err;
 
 	qt_mod_obj.clean_number = false;
 	conf_get_bool(conf_cur(), "qt_clean_number", &qt_mod_obj.clean_number);
+
+	apply_enabled_accounts();
 
 	err = mqueue_alloc(&qt_mod_obj.mq, mqueue_handler, &qt_mod_obj);
 	if (err)
