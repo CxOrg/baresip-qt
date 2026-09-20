@@ -67,6 +67,11 @@ public:
 	/** Show the panel positioned near the tray icon. */
 	void showPanel();
 
+	/** Close the panel if the user clicked outside it (popup-like
+	 *  behavior without Qt::Popup, which doesn't work on Wayland
+	 *  without a transient parent). */
+	bool eventFilter(QObject *obj, QEvent *event) override;
+
 	quintptr callPtr() const { return callPtr_; }
 	State state() const { return state_; }
 

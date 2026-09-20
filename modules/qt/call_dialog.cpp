@@ -65,10 +65,12 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 {
 	setWindowTitle("Dial");
 	setAttribute(Qt::WA_DeleteOnClose, false);
-	/* Frameless popup that closes when clicking outside, like a
-	 * menu extending from the tray icon. Inherits the system/Plasma
-	 * Qt style automatically. */
-	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+	/* Frameless tool window that works on Wayland (unlike Qt::Popup,
+	 * which needs a transient parent). Closes on click-outside via
+	 * an event filter. Inherits the system/Plasma Qt style. */
+	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+	setAttribute(Qt::WA_ShowWithoutActivating, false);
+	installEventFilter(this);
 	buildUi();
 	applyState();
 }
@@ -83,7 +85,8 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	  trayIcon_(trayIcon)
 {
 	setAttribute(Qt::WA_DeleteOnClose, false);
-	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+	installEventFilter(this);
 	buildUi();
 	uriEdit_->setText(peerUri);
 	applyState();
@@ -139,6 +142,22 @@ void CallDialog::showPanel()
 	show();
 	raise();
 	activateWindow();
+}
+
+
+bool CallDialog::eventFilter(QObject *obj, QEvent *event)
+{
+	/* Close the panel when it loses focus (click-outside behavior
+	 * to emulate Qt::Popup without Wayland's transient-parent
+	 * requirement). Only do this in Dialing state -- incoming and
+	 * in-call panels should stay open until the call ends. */
+	if (obj == this && event->type() == QEvent::ActivationChange) {
+		if (!isActiveWindow() && state_ == State::Dialing) {
+			hide();
+			return true;
+		}
+	}
+	return QDialog::eventFilter(obj, event);
 }
 
 
