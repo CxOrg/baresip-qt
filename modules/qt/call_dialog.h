@@ -99,6 +99,8 @@ private:
 	void positionNearTray();
 	void setupLayerShell();
 	void fitWidthToHistory();
+	void refreshList();
+	void refreshContacts();
 
 	State state_;
 	quintptr callPtr_ = 0;
@@ -106,17 +108,21 @@ private:
 	bool isOutgoing_ = false;  /**< direction for InCall label */
 	QSystemTrayIcon *trayIcon_ = nullptr;
 	bool layerShellApplied_ = false;
+	/** false = list shows call history, true = contacts. */
+	bool showingContacts_ = false;
 
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
 	QPushButton  *redBtn_     = nullptr;
 	QPushButton  *dialpadBtn_ = nullptr;
+	QPushButton  *listToggleBtn_ = nullptr;
 	QListWidget  *historyList_ = nullptr;
 
 private slots:
 	void onGreen();
 	void onRed();
 	void onDialpad();
+	void onToggleList();
 	void onHistoryClicked(QListWidgetItem *item);
 	void onHistoryDoubleClicked(QListWidgetItem *item);
 };

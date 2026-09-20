@@ -328,9 +328,18 @@ void CallDialog::buildUi()
 
 	auto *layout = new QVBoxLayout(panel);
 
+	/* Top row: label + toggle switching the list between the
+	 * call history and the contacts list. */
+	auto *topRow = new QHBoxLayout();
 	auto *label = new QLabel(panel);
-	layout->addWidget(label);
 	label->setText("Enter SIP URI or number:");
+	topRow->addWidget(label);
+	topRow->addStretch();
+	listToggleBtn_ = new QPushButton("History/Contact", panel);
+	topRow->addWidget(listToggleBtn_);
+	layout->addLayout(topRow);
+	connect(listToggleBtn_, &QPushButton::clicked,
+		this, &CallDialog::onToggleList);
 
 	uriEdit_ = new QLineEdit(panel);
 	uriEdit_->setAlignment(Qt::AlignLeft);
@@ -393,7 +402,7 @@ void CallDialog::applyState()
 		redBtn_->setText("Cancel");
 		dialpadBtn_->hide();
 		historyList_->show();
-		refreshHistory();
+		refreshList();
 		break;
 
 	case State::Incoming:
@@ -606,4 +615,54 @@ void CallDialog::onHistoryDoubleClicked(QListWidgetItem *item)
 	uriEdit_->setText(uri);
 	/* Double-click = dial immediately. */
 	onGreen();
+}
+
+
+void CallDialog::onToggleList()
+{
+	showingContacts_ = !showingContacts_;
+	refreshList();
+}
+
+
+void CallDialog::refreshList()
+{
+	if (showingContacts_)
+		refreshContacts();
+	else
+		refreshHistory();
+}
+
+
+void CallDialog::refreshContacts()
+{
+	if (!historyList_)
+		return;
+
+	historyList_->clear();
+
+	/* Same format as the tray "Call Contact" menu: "Name  number",
+	 * with the bare number stashed for click-to-fill. The full SIP
+	 * URI is reconstructed on dialing. */
+	struct contacts *contacts = baresip_contacts();
+	struct le *le;
+	for (le = list_head(contact_list(contacts)); le; le = le->next) {
+		struct contact *c = static_cast<struct contact *>(le->data);
+
+		QString number = uriToNumber(contact_uri(c));
+		QString name;
+		const struct sip_addr *addr = contact_addr(c);
+		if (addr && pl_isset(&addr->dname))
+			name = QString::fromUtf8(addr->dname.p,
+						 (int)addr->dname.l)
+				.remove('"').trimmed();
+
+		QString label = name.isEmpty()
+			? number
+			: QString("%1  %2").arg(name, number);
+
+		auto *item = new QListWidgetItem(label);
+		item->setData(Qt::UserRole, number);
+		historyList_->addItem(item);
+	}
 }
