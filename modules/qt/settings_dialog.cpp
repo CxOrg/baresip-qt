@@ -498,7 +498,15 @@ void SettingsDialog::loadAccount(AccountWidgets &w, int index)
 	w.origLine = line;
 	w.enabled->setChecked(!line.contains(";enabled=no"));
 	w.displayName->setText(displayNameFromLine(line));
-	w.authUser->setText(lineParam(line, "auth_user"));
+	/* Auth user: the explicit ;auth_user= param, or the AOR
+	 * user part — baresip authenticates with the user part
+	 * when no auth_user param is set. */
+	QString au = lineParam(line, "auth_user");
+	if (au.isEmpty()) {
+		QString uh = userHostFromAor(line);
+		au = uh.left(uh.indexOf('@'));
+	}
+	w.authUser->setText(au);
 	w.authPass->setText(lineParam(line, "auth_pass"));
 
 	/* SIP domain: between '@' and the next ';' or '>' inside <>. */
@@ -573,7 +581,8 @@ void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 	updates["enabled"] = w.enabled->isChecked() ? "yes" : "no";
 	if (!w.displayName->text().isEmpty())
 		updates["displayname"] = w.displayName->text();
-	updates["auth_user"] = w.authUser->text();
+	if (!w.authUser->text().isEmpty())
+		updates["auth_user"] = w.authUser->text();
 	if (!w.authPass->text().isEmpty())
 		updates["auth_pass"] = w.authPass->text();
 	updates["regint"] = QString::number(w.regint->value());
