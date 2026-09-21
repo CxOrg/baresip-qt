@@ -50,8 +50,6 @@ enum qt_mod_events {
 	MQ_HANGUP,
 	MQ_SELECT_UA,
 	MQ_DTMF,
-	MQ_REGISTER,
-	MQ_UNREGISTER,
 	MQ_UA_ALLOC,
 	MQ_UA_FREE,
 	MQ_SYNC_CONTACTS,
@@ -78,8 +76,6 @@ void qt_mod_connect(const char *uri);
 void qt_mod_answer(struct call *call);
 void qt_mod_hangup(struct call *call);
 void qt_mod_select_ua(struct ua *ua);
-void qt_mod_register(struct ua *ua);
-void qt_mod_unregister(struct ua *ua);
 void qt_mod_ua_alloc(const QString &line);
 void qt_mod_ua_free(struct ua *ua);
 void qt_mod_sync_contacts(const QStringList &lines);

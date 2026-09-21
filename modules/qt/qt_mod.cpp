@@ -460,14 +460,6 @@ static void mqueue_handler(int id, void *data, void *arg)
 		qt_mod_obj.ua_cur = static_cast<struct ua *>(data);
 		break;
 
-	case MQ_REGISTER:
-		ua_register(static_cast<struct ua *>(data));
-		break;
-
-	case MQ_UNREGISTER:
-		ua_unregister(static_cast<struct ua *>(data));
-		break;
-
 	case MQ_UA_ALLOC: {
 		char *aor = static_cast<char *>(data);
 		struct ua *newua = NULL;
@@ -555,18 +547,6 @@ void qt_mod_hangup(struct call *call)
 void qt_mod_select_ua(struct ua *ua)
 {
 	mqueue_push(qt_mod_obj.mq, MQ_SELECT_UA, ua);
-}
-
-
-void qt_mod_register(struct ua *ua)
-{
-	mqueue_push(qt_mod_obj.mq, MQ_REGISTER, ua);
-}
-
-
-void qt_mod_unregister(struct ua *ua)
-{
-	mqueue_push(qt_mod_obj.mq, MQ_UNREGISTER, ua);
 }
 
 
