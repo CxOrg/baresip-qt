@@ -188,12 +188,9 @@ void TrayApp::populateContacts()
 		 * The bare number is stored in the action and goes to
 		 * the dial field; the full URI is reconstructed on
 		 * dialing (account_uri_complete_strdup). */
-		QString number = uriToNumber(contact_uri(c));
-		/* Dial target: the bare number for dialable contacts,
-		 * the full sip: URI for foreign-address contacts. */
-		QString target = isDialNumber(number)
-			? number
-			: uriToFull(contact_uri(c));
+		/* Dial target: the bare number for dialable contacts on
+		 * our domain, the full sip: URI for foreign addresses. */
+		QString target = uriToTarget(contact_uri(c));
 		QString name;
 		const struct sip_addr *addr = contact_addr(c);
 		if (addr && pl_isset(&addr->dname))

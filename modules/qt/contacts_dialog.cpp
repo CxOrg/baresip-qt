@@ -323,11 +323,8 @@ void ContactsDialog::reloadContacts()
 			QString line = QString::fromUtf8(f.readLine());
 			ContactEntry e;
 			if (parseContactLine(line, e)) {
-				QString number = uriToNumber(
+				QString target = uriToTarget(
 					e.uri.toUtf8().constData());
-				QString target = isDialNumber(number)
-					? number
-					: uriToFull(e.uri.toUtf8().constData());
 				QString label = e.name.isEmpty()
 					? target
 					: QString("%1  %2").arg(e.name, target);
@@ -438,11 +435,8 @@ void ContactsDialog::onContactClicked(QListWidgetItem *item)
 		return;
 
 	const ContactEntry &e = entries_[editingIndex_];
-	QString number = uriToNumber(e.uri.toUtf8().constData());
 	cNameEdit_->setText(e.name);
-	cNumEdit_->setText(isDialNumber(number)
-		? number
-		: uriToFull(e.uri.toUtf8().constData()));
+	cNumEdit_->setText(uriToTarget(e.uri.toUtf8().constData()));
 	contactsStack_->setCurrentIndex(1);
 }
 

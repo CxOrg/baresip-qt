@@ -95,6 +95,59 @@ QString uriToFull(const char *uri)
 }
 
 
+/** Host part of a URI ("sip:u@host:port;p" -> "host"). */
+static QString uriHostPart(QString s)
+{
+	int lt = s.indexOf('<');
+	int gt = s.indexOf('>');
+	if (lt >= 0 && gt > lt)
+		s = s.mid(lt + 1, gt - lt - 1);
+	if (s.startsWith("sip:", Qt::CaseInsensitive))
+		s = s.mid(4);
+	else if (s.startsWith("sips:", Qt::CaseInsensitive))
+		s = s.mid(5);
+	int at = s.indexOf('@');
+	if (at < 0)
+		return QString();
+	s = s.mid(at + 1);
+	int end = s.indexOf(';');
+	if (end >= 0)
+		s = s.left(end);
+	end = s.indexOf(':');
+	if (end >= 0)
+		s = s.left(end);
+	return s.trimmed();
+}
+
+
+/** True when uri's host differs from ua account's domain. */
+static bool isForeignToUa(struct ua *ua, const char *uri)
+{
+	QString host = uriHostPart(QString::fromUtf8(uri));
+	if (host.isEmpty() || !ua)
+		return false;
+	QString ours = uriHostPart(
+		QString::fromUtf8(account_aor(ua_account(ua))));
+	return !ours.isEmpty() &&
+		host.compare(ours, Qt::CaseInsensitive) != 0;
+}
+
+
+bool isForeignUri(const char *uri)
+{
+	return isForeignToUa(qt_current_ua(), uri);
+}
+
+
+QString uriToTarget(const char *uri)
+{
+	QString num = uriToNumber(uri);
+	if (isDialNumber(num) && !isForeignUri(uri))
+		return num;
+	return uriToFull(uri);
+}
+
+
 /** Account menu label: "<display name>  sip:<user>" — the
  *  @domain part of the AOR is suppressed. Returns just
  *  "sip:<user>" when the account has no display name.
@@ -336,9 +389,10 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		 * rejected/hangup before being answered. Mirrors the
 		 * outgoing-call logging at BEVENT_CALL_OUTGOING.
 		 * History stores the dial number (when the user part
-		 * is a phone number) and the full SIP URI. */
+		 * is a phone number on our own domain) and the full
+		 * SIP URI. */
 		QString peerNum = uriToNumber(call_peeruri(call));
-		if (!isDialNumber(peerNum))
+		if (!isDialNumber(peerNum) || isForeignToUa(ua, call_peeruri(call)))
 			peerNum.clear();
 		QString peerFull = uriToFull(call_peeruri(call));
 
@@ -362,7 +416,7 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	case BEVENT_CALL_OUTGOING:
 	{
 		QString peerNum = uriToNumber(call_peeruri(call));
-		if (!isDialNumber(peerNum))
+		if (!isDialNumber(peerNum) || isForeignToUa(ua, call_peeruri(call)))
 			peerNum.clear();
 		QString peerFull = uriToFull(call_peeruri(call));
 

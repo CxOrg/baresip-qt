@@ -633,10 +633,7 @@ void CallDialog::refreshContacts()
 	for (le = list_head(contact_list(contacts)); le; le = le->next) {
 		struct contact *c = static_cast<struct contact *>(le->data);
 
-		QString number = uriToNumber(contact_uri(c));
-		QString target = isDialNumber(number)
-			? number
-			: uriToFull(contact_uri(c));
+		QString target = uriToTarget(contact_uri(c));
 		QString name;
 		const struct sip_addr *addr = contact_addr(c);
 		if (addr && pl_isset(&addr->dname))

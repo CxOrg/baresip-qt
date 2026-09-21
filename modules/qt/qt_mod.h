@@ -96,6 +96,15 @@ bool isDialNumber(const QString &s);
  *  display name/<...> wrapper and ;params, ensures a sip: scheme. */
 QString uriToFull(const char *uri);
 
+/** True when uri's host differs from the current account's domain —
+ *  a foreign SIP address that must be dialed as a full URI. */
+bool isForeignUri(const char *uri);
+
+/** Display/dial target for a peer/contact URI: the bare number when
+ *  the user part is dialable AND the domain matches our account;
+ *  otherwise the full sip: URI. */
+QString uriToTarget(const char *uri);
+
 /** Account menu label: "<display name>  sip:<user>". */
 QString accountLabel(struct ua *ua);
 
