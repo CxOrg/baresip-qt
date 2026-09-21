@@ -259,6 +259,13 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 
 	switch (ev) {
 
+	case BEVENT_CREATE:
+		/* A UA was created by any means (settings apply, /uanew)
+		 * -- rebuild the account menu. */
+		QMetaObject::invokeMethod(mod->tray, "accountsChanged",
+			Qt::QueuedConnection);
+		break;
+
 	case BEVENT_REGISTERING:
 	case BEVENT_UNREGISTERING:
 	case BEVENT_REGISTER_OK:
@@ -452,6 +459,10 @@ static void mqueue_handler(int id, void *data, void *arg)
 		if (err)
 			BS_WARNING("qt: failed to create account: %m\n", err);
 		mem_deref(data);
+		/* The UA list changed -- rebuild the account menu. */
+		if (mod->tray)
+			QMetaObject::invokeMethod(mod->tray, "accountsChanged",
+				Qt::QueuedConnection);
 		break;
 	}
 
@@ -460,6 +471,10 @@ static void mqueue_handler(int id, void *data, void *arg)
 		if (qt_mod_obj.ua_cur == ua)
 			qt_mod_obj.ua_cur = NULL;
 		mem_deref(ua);
+		/* The UA list changed -- rebuild the account menu. */
+		if (mod->tray)
+			QMetaObject::invokeMethod(mod->tray, "accountsChanged",
+				Qt::QueuedConnection);
 		break;
 	}
 

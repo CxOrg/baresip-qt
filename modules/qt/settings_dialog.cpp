@@ -17,7 +17,6 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QMessageBox>
-#include <QProcess>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
@@ -114,6 +113,45 @@ static QString lineParam(const QString &line, const QString &key)
 		v = v.mid(1, v.length() - 2);
 	return v;
 }
+
+/** Extract "user@host[:port]" from an AOR string — works on both
+ *  accounts-file lines and account_aor() output: keeps the URI
+ *  inside <...>, strips the scheme and any ;params. */
+static QString userHostFromAor(QString aor)
+{
+	int lt = aor.indexOf('<');
+	int gt = aor.indexOf('>');
+	if (lt >= 0 && gt > lt)
+		aor = aor.mid(lt + 1, gt - lt - 1);
+	if (aor.startsWith("sip:"))
+		aor = aor.mid(4);
+	else if (aor.startsWith("sips:"))
+		aor = aor.mid(5);
+	int semi = aor.indexOf(';');
+	if (semi >= 0)
+		aor = aor.left(semi);
+	return aor.trimmed();
+}
+
+
+/** Find the live UA whose account AOR matches an accounts-file
+ *  line's user@host. Returns nullptr when the account has no UA
+ *  (disabled accounts are destroyed at startup). */
+static struct ua *findUaByUserHost(const QString &line)
+{
+	QString want = userHostFromAor(line);
+	if (want.isEmpty())
+		return nullptr;
+
+	for (struct le *le = list_head(uag_list()); le; le = le->next) {
+		struct ua *ua = static_cast<struct ua *>(le->data);
+		const char *aor = account_aor(ua_account(ua));
+		if (aor && userHostFromAor(QString::fromUtf8(aor)) == want)
+			return ua;
+	}
+	return nullptr;
+}
+
 
 static QString displayNameFromLine(const QString &line)
 {
@@ -457,6 +495,7 @@ void SettingsDialog::loadAccount(AccountWidgets &w, int index)
 	if (line.isEmpty())
 		return;
 
+	w.origLine = line;
 	w.enabled->setChecked(!line.contains(";enabled=no"));
 	w.displayName->setText(displayNameFromLine(line));
 	w.authUser->setText(lineParam(line, "auth_user"));
@@ -522,15 +561,14 @@ void SettingsDialog::loadSettings()
 }
 
 
-void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
+void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 {
 	if (accountLine(index).isEmpty())
 		return;
 
 	/* Persist to ~/.baresip/accounts (update known params in-place,
-	 * preserving unknown params like outbound, 100rel, etc.). The
-	 * app is restarted after saving, which re-parses the file and
-	 * rebuilds all UAs — no live apply is needed here. */
+	 * preserving unknown params like outbound, 100rel, etc.), then
+	 * apply in-process below. */
 	QMap<QString, QString> updates;
 	updates["enabled"] = w.enabled->isChecked() ? "yes" : "no";
 	if (!w.displayName->text().isEmpty())
@@ -568,6 +606,24 @@ void SettingsDialog::saveAccount(const AccountWidgets &w, int index)
 	 * a ;param — update it separately. */
 	if (!w.sipDomain->text().isEmpty())
 		updateAccountsDomain(w.sipDomain->text(), index);
+
+	/* Apply in-process: nothing to do when the line is unchanged. */
+	QString newLine = accountLine(index);
+	if (newLine == w.origLine)
+		return;
+
+	/* Destroy and recreate the UA from the new line — a fresh reg
+	 * client avoids the "unregistering" stall that ua_register()
+	 * on a live UA can hit. The mqueue is FIFO, so the free lands
+	 * before the alloc. Match the live UA by the *original* AOR
+	 * (the file line may already have a new domain). */
+	struct ua *ua = findUaByUserHost(w.origLine);
+	if (ua)
+		qt_mod_ua_free(ua);
+	if (w.enabled->isChecked() && !newLine.isEmpty())
+		qt_mod_ua_alloc(newLine);
+
+	w.origLine = newLine;
 }
 
 
@@ -576,37 +632,21 @@ void SettingsDialog::saveSettings()
 	for (int i = 0; i < kMaxAccounts; ++i)
 		saveAccount(accounts_[i], i);
 
-	/* Audio device persistence: write to ~/.baresip/config. */
-	/* (Audio device changes via config require a restart; we
-	 * just persist the selection here.) */
-}
-
-
-void SettingsDialog::restartApp()
-{
-	/* Restart the whole app: simplest reliable re-register. The
-	 * detached shell waits for this process to exit (releasing
-	 * the SIP socket) before launching the new instance, which
-	 * re-parses the accounts file and rebuilds all UAs. */
-	QString cmd = QString(
-		"while kill -0 %1 2>/dev/null; do sleep 0.1; done;"
-		" exec baresip").arg(QCoreApplication::applicationPid());
-	QProcess::startDetached("sh", {"-c", cmd});
-	qt_mod_quit();
+	/* Audio device selection is not persisted yet — baresip writes
+	 * the module config itself. */
 }
 
 
 void SettingsDialog::onApply()
 {
 	saveSettings();
-	restartApp();
 }
 
 
 void SettingsDialog::onOk()
 {
 	saveSettings();
-	restartApp();
+	accept();
 }
 
 

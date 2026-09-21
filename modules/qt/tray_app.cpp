@@ -452,16 +452,22 @@ void TrayApp::addDialpadAction(QMenu *callMenu, quintptr callPtr,
 
 /* ---- slots invoked (via queued connection) from the re/core thread ---- */
 
+void TrayApp::accountsChanged()
+{
+	accountsMenu_->clear();
+	for (QAction *a : accountsGroup_->actions())
+		accountsGroup_->removeAction(a);
+	populateAccounts();
+	refreshTrayMenu();
+}
+
+
 void TrayApp::accountStatus(quintptr uaPtr, QString label, QString status)
 {
 	QAction *act = findAccountAction(uaPtr);
 	if (!act) {
 		/* Account added after startup; just rebuild. */
-		accountsMenu_->clear();
-		for (QAction *a : accountsGroup_->actions())
-			accountsGroup_->removeAction(a);
-		populateAccounts();
-		refreshTrayMenu();
+		accountsChanged();
 		return;
 	}
 

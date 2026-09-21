@@ -12,9 +12,11 @@
  * ";enabled={yes,no}" addr-param (ignored by baresip's parser, honored
  * by the qt module which unregisters disabled accounts at startup).
  *
- * Settings are written back to ~/.baresip/accounts and
- * ~/.baresip/config, then the app restarts itself so the accounts
- * file is re-parsed and all UAs are rebuilt with the new settings.
+ * Settings are written back to ~/.baresip/accounts, then applied
+ * in-process: a changed account's UA is destroyed and recreated from
+ * the new accounts line (a fresh reg client avoids the stuck
+ * "unregistering" state), and the tray rebuilds its account menu on
+ * UA create/destroy.
  */
 #pragma once
 
@@ -61,6 +63,10 @@ private:
 		QComboBox *mediaenc    = nullptr;
 		QComboBox *medianat    = nullptr;
 		QLineEdit *audioCodecs = nullptr;
+
+		/** Accounts-file line as it was at load time; used to
+		 *  detect changes and to find the live UA by AOR. */
+		QString origLine;
 	};
 
 	void buildUi();
@@ -69,8 +75,7 @@ private:
 	void loadSettings();
 	void loadAccount(AccountWidgets &w, int index);
 	void saveSettings();
-	void saveAccount(const AccountWidgets &w, int index);
-	void restartApp();
+	void saveAccount(AccountWidgets &w, int index);
 
 	AccountWidgets accounts_[kMaxAccounts];
 

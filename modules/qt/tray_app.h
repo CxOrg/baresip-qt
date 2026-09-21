@@ -32,6 +32,9 @@ public slots:
 	 * which runs on the re/core thread.
 	 */
 	void accountStatus(quintptr uaPtr, QString label, QString status);
+	/* Rebuilds the Online Accounts menu after a UA is created or
+	 * destroyed (settings apply, disable/enable). */
+	void accountsChanged();
 	void callIncoming(quintptr callPtr, QString peerUri, QString peerName);
 	void callOutgoing(quintptr callPtr, QString peerUri);
 	void callClosed(quintptr callPtr, bool missed,
