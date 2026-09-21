@@ -506,6 +506,7 @@ struct config {
 int config_parse_conf(struct config *cfg, const struct conf *conf);
 int config_print(struct re_printf *pf, const struct config *cfg);
 int config_write_template(const char *file, const struct config *cfg);
+int config_migrate(const char *file);
 struct config *conf_config(void);
 
 

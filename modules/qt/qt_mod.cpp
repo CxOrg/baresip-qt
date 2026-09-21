@@ -627,6 +627,16 @@ void qt_mod_connect(const char *uri)
 	int err;
 
 	QString in = QString::fromUtf8(uri).trimmed();
+
+	/* qt_clean_number: strip -/()/spaces from plain numbers.
+	 * clean_number() leaves input unchanged if it contains
+	 * letters or '@', so SIP URIs pass through unharmed. */
+	if (qt_mod_obj.clean_number) {
+		QByteArray ba = in.toUtf8();
+		if (clean_number(ba.data()) >= 0)
+			in = QString::fromUtf8(ba);
+	}
+
 	if (in.contains('@') || in.startsWith("sip:", Qt::CaseInsensitive)
 	    || in.startsWith("sips:", Qt::CaseInsensitive)) {
 		/* A full SIP URI (e.g. a foreign-domain address from
