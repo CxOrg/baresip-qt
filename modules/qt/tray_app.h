@@ -35,6 +35,9 @@ public slots:
 	/* Rebuilds the Online Accounts menu after a UA is created or
 	 * destroyed (settings apply, disable/enable). */
 	void accountsChanged();
+	/* Re-applies the presence toggle state to a UA that has just
+	 * registered, so the status is published on connect. */
+	void publishPresence(quintptr uaPtr);
 	void callIncoming(quintptr callPtr, QString peerUri, QString peerName);
 	void callOutgoing(quintptr callPtr, QString peerUri);
 	void callClosed(quintptr callPtr, bool missed,

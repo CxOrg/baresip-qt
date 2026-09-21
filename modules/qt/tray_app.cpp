@@ -89,19 +89,18 @@ void TrayApp::buildMenu()
 {
 	menu_ = new QMenu();
 
-	/* User Presence: a single toggle with a green/red spot. */
+	/* User Presence: a single toggle with a green/red spot.
+	 * Defaults to available — baresip's default is CLOSED, so
+	 * push OPEN to every account instead of reading it back. */
 	presenceAct_ = menu_->addAction("User Presence");
 	connect(presenceAct_, &QAction::triggered,
 		this, &TrayApp::onPresenceToggled);
-	/* Initialise from the first account's current presence. */
-	struct le *le = list_head(uag_list());
-	if (le) {
+	presenceOpen_ = true;
+	for (struct le *le = list_head(uag_list()); le; le = le->next) {
 		struct ua *ua = static_cast<struct ua *>(le->data);
-		presenceOpen_ =
-			ua_presence_status(ua) == PRESENCE_OPEN;
+		ua_presence_status_set(ua, PRESENCE_OPEN);
 	}
-	presenceAct_->setIcon(spotIcon(presenceOpen_
-		? QColor("#4caf50") : QColor("#e53935")));
+	presenceAct_->setIcon(spotIcon(QColor("#4caf50")));
 
 	/* Online accounts submenu */
 	accountsMenu_ = menu_->addMenu("Online Accounts");
@@ -362,6 +361,16 @@ void TrayApp::onPresenceToggled()
 
 	presenceAct_->setIcon(spotIcon(presenceOpen_
 		? QColor("#4caf50") : QColor("#e53935")));
+}
+
+
+void TrayApp::publishPresence(quintptr uaPtr)
+{
+	/* A UA (re)registered — apply the toggle state to it so the
+	 * presence module publishes the user's chosen status. */
+	struct ua *ua = reinterpret_cast<struct ua *>(uaPtr);
+	ua_presence_status_set(ua,
+		presenceOpen_ ? PRESENCE_OPEN : PRESENCE_CLOSED);
 }
 
 

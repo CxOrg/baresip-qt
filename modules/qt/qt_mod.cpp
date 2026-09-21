@@ -381,6 +381,11 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(ua)),
 			Q_ARG(QString, accountLabel(ua)),
 			Q_ARG(QString, QString::fromUtf8(event_reg_str(ev))));
+		if (ev == BEVENT_REGISTER_OK)
+			QMetaObject::invokeMethod(mod->tray, "publishPresence",
+				Qt::QueuedConnection,
+				Q_ARG(quintptr,
+					reinterpret_cast<quintptr>(ua)));
 		break;
 
 	case BEVENT_CALL_INCOMING:
