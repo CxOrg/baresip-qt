@@ -343,6 +343,40 @@ static bool appendAccountLine(const QString &line)
 	return true;
 }
 
+/** Remove the Nth non-comment, non-empty account line from
+ *  ~/.baresip/accounts. Returns true on success. */
+static bool removeAccountLine(int index)
+{
+	QString path = homeBaresip() + "/accounts";
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return false;
+
+	QStringList lines;
+	while (!f.atEnd())
+		lines << QString::fromUtf8(f.readLine());
+	f.close();
+
+	bool removed = false;
+	int seen = 0;
+	for (int i = 0; i < lines.size(); ++i) {
+		QString t = lines[i].trimmed();
+		if (t.isEmpty() || t.startsWith('#'))
+			continue;
+		if (seen == index) {
+			lines.removeAt(i);
+			removed = true;
+			break;
+		}
+		++seen;
+	}
+
+	if (!removed)
+		return false;
+
+	return writeAccounts(lines);
+}
+
 /** Build a blank account line from the last account entry: copy
  *  the structure/params (transport, regint, STUN, mediaenc, etc.)
  *  but blank the display name, auth user, auth pass, and the AOR
@@ -578,17 +612,38 @@ void SettingsDialog::buildUi()
 		tabs->addTab(buildAccountPage(accounts_[i], tabs),
 			     QString("Account %1").arg(i + 1));
 
-	/* ---- "+" button in the tab header row (top-right corner) ---- */
-	addTabBtn_ = new QPushButton("+", tabs);
+	/* ---- "+"/"-" buttons in the tab header row (top-right corner) ---- */
+	auto *corner = new QWidget(tabs);
+	auto *cornerLay = new QHBoxLayout(corner);
+	cornerLay->setContentsMargins(0, 0, 0, 0);
+	cornerLay->setSpacing(2);
+
+	addTabBtn_ = new QPushButton("+", corner);
 	addTabBtn_->setFixedSize(20, 20);
 	addTabBtn_->setToolTip("Add account");
 	addTabBtn_->setStyleSheet(
 		"QPushButton { border: none; font-size: 16px;"
 		"              font-weight: bold; padding: 0; }"
 		"QPushButton:hover { color: palette(highlight); }");
-	tabs->setCornerWidget(addTabBtn_, Qt::TopRightCorner);
+	cornerLay->addWidget(addTabBtn_);
+
+	removeTabBtn_ = new QPushButton(QString::fromUtf8("\xe2\x88\x92"),
+					corner);
+	removeTabBtn_->setFixedSize(20, 20);
+	removeTabBtn_->setToolTip("Remove this account");
+	removeTabBtn_->setStyleSheet(
+		"QPushButton { border: none; font-size: 16px;"
+		"              font-weight: bold; padding: 0; }"
+		"QPushButton:hover { color: palette(highlight); }");
+	cornerLay->addWidget(removeTabBtn_);
+
+	tabs->setCornerWidget(corner, Qt::TopRightCorner);
 	connect(addTabBtn_, &QPushButton::clicked,
 		this, &SettingsDialog::onAddAccount);
+	connect(removeTabBtn_, &QPushButton::clicked,
+		this, &SettingsDialog::onRemoveAccount);
+	connect(tabs, &QTabWidget::currentChanged,
+		this, &SettingsDialog::updateRemoveTabVisibility);
 
 	/* ---- Audio tab ---- */
 	auto *audioTab = new QWidget(tabs);
@@ -897,4 +952,63 @@ void SettingsDialog::updateAddTabVisibility()
 {
 	int n = tabs_->count() - 1; /* exclude Audio tab */
 	addTabBtn_->setVisible(n < kMaxAccounts);
+	updateRemoveTabVisibility();
+}
+
+
+void SettingsDialog::updateRemoveTabVisibility()
+{
+	/* The "-" button is shown only when an account tab other than
+	 * the first (index >= 1) is the current tab. The Audio tab is
+	 * always the last tab, so any current index in [1, nAccounts-1]
+	 * qualifies. */
+	int idx = tabs_->currentIndex();
+	int nAccounts = tabs_->count() - 1; /* exclude Audio tab */
+	bool removable = (idx >= 1) && (idx < nAccounts);
+	removeTabBtn_->setVisible(removable);
+}
+
+
+void SettingsDialog::onRemoveAccount()
+{
+	int idx = tabs_->currentIndex();
+	int nAccounts = tabs_->count() - 1; /* exclude Audio tab */
+	if (idx < 1 || idx >= nAccounts)
+		return;
+
+	auto ret = QMessageBox::question(
+		this, "Remove account",
+		QString("Remove account %1? This deletes the account "
+			"record from the accounts file.")
+			.arg(idx + 1),
+		QMessageBox::Yes | QMessageBox::No);
+	if (ret != QMessageBox::Yes)
+		return;
+
+	/* Destroy the live UA for this account (if any). */
+	struct ua *ua = findUaByUserHost(accounts_[idx].origLine);
+	if (ua)
+		qt_mod_ua_free(ua);
+
+	/* Remove the line from ~/.baresip/accounts. */
+	removeAccountLine(idx);
+
+	/* Remove the tab. */
+	tabs_->removeTab(idx);
+
+	/* Shift the AccountWidgets entries down so slot i holds the
+	 * data for the (now renumbered) tab i. The page widgets move
+	 * with the tab; only the AccountWidgets records (which are
+	 * indexed by slot, not by tab) need reindexing. */
+	for (int i = idx; i < nAccounts - 1; ++i)
+		accounts_[i] = accounts_[i + 1];
+
+	/* Clear the now-vacant top slot. */
+	accounts_[nAccounts - 1] = AccountWidgets{};
+
+	/* Renumber the remaining account tabs. */
+	for (int i = 0; i < nAccounts - 1; ++i)
+		tabs_->setTabText(i, QString("Account %1").arg(i + 1));
+
+	updateAddTabVisibility();
 }

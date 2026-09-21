@@ -78,12 +78,15 @@ private:
 	void saveSettings();
 	void saveAccount(AccountWidgets &w, int index);
 	void onAddAccount();
+	void onRemoveAccount();
 	void updateAddTabVisibility();
+	void updateRemoveTabVisibility();
 
 	AccountWidgets accounts_[kMaxAccounts];
 
-	QTabWidget *tabs_      = nullptr;
-	QPushButton *addTabBtn_ = nullptr;
+	QTabWidget *tabs_         = nullptr;
+	QPushButton *addTabBtn_    = nullptr;
+	QPushButton *removeTabBtn_ = nullptr;
 
 	/* Audio tab */
 	QComboBox *audioSrc_     = nullptr;
