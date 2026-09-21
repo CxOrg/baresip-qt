@@ -70,3 +70,5 @@ install_manifest.txt
 *.pkg.tar.gz
 *.log
 *.log.*
+
+*.code-workspace
