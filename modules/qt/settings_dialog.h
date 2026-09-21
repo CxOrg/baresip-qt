@@ -44,8 +44,9 @@ public:
 	void setAnchorPoint(const QPoint &pos);
 
 private:
-	/** Number of account tabs shown in the dialog. */
-	static constexpr int kMaxAccounts = 2;
+	/** Maximum number of account tabs (the + button hides at this
+	 *  count). */
+	static constexpr int kMaxAccounts = 4;
 
 	/** All input widgets of one account tab. */
 	struct AccountWidgets {
@@ -76,8 +77,13 @@ private:
 	void loadAccount(AccountWidgets &w, int index);
 	void saveSettings();
 	void saveAccount(AccountWidgets &w, int index);
+	void onAddAccount();
+	void updateAddTabVisibility();
 
 	AccountWidgets accounts_[kMaxAccounts];
+
+	QTabWidget *tabs_      = nullptr;
+	QPushButton *addTabBtn_ = nullptr;
 
 	/* Audio tab */
 	QComboBox *audioSrc_     = nullptr;

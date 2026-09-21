@@ -292,6 +292,136 @@ static bool updateAccountsDomain(const QString &domain, int index)
 }
 
 
+/** Remove a ";key=value" addr-param from an account line
+ *  (params after the closing '>'). Returns the modified line. */
+static QString removeLineParam(const QString &line, const QString &key)
+{
+	int gt = line.lastIndexOf('>');
+	int start = gt >= 0 ? gt : 0;
+	QString param = QString(";%1=").arg(key);
+	int pi = line.indexOf(param, start);
+	if (pi < 0)
+		return line;
+	int vi = pi + param.length();
+	int end = line.indexOf(';', vi);
+	int nl = line.indexOf('\n', vi);
+	if (end < 0 || (nl >= 0 && nl < end))
+		end = nl;
+	if (end < 0)
+		end = line.length();
+	return line.left(pi) + line.mid(end);
+}
+
+/** Count non-comment, non-empty account lines in the accounts file. */
+static int countAccountLines()
+{
+	QFile f(homeBaresip() + "/accounts");
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return 0;
+	int count = 0;
+	while (!f.atEnd()) {
+		QString t = QString::fromUtf8(f.readLine()).trimmed();
+		if (!t.isEmpty() && !t.startsWith('#'))
+			++count;
+	}
+	f.close();
+	return count;
+}
+
+/** Append a new account line to ~/.baresip/accounts. */
+static bool appendAccountLine(const QString &line)
+{
+	QFile f(homeBaresip() + "/accounts");
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
+		return false;
+	QTextStream out(&f);
+	out << line;
+	if (!line.endsWith('\n'))
+		out << '\n';
+	out.flush();
+	f.close();
+	return true;
+}
+
+/** Build a blank account line from the last account entry: copy
+ *  the structure/params (transport, regint, STUN, mediaenc, etc.)
+ *  but blank the display name, auth user, auth pass, and the AOR
+ *  user@domain. The new account is disabled by default. */
+static QString blankAccountFromLast(const QString &lastLine)
+{
+	QString line = lastLine;
+
+	/* Remove quoted display name prefix before <. */
+	int lt = line.indexOf('<');
+	if (lt > 0) {
+		QString pre = line.left(lt).trimmed();
+		if (pre.startsWith('"') && pre.endsWith('"'))
+			line = line.mid(lt);
+	}
+
+	/* Remove params that should be blank. */
+	line = removeLineParam(line, "displayname");
+	line = removeLineParam(line, "auth_user");
+	line = removeLineParam(line, "auth_pass");
+	line = removeLineParam(line, "enabled");
+
+	/* Replace user@domain in <sip:user@domain...> with @. */
+	lt = line.indexOf('<');
+	if (lt >= 0) {
+		int sip = line.indexOf("sip:", lt);
+		if (sip >= 0) {
+			int at = line.indexOf('@', sip);
+			int gt = line.indexOf('>', sip);
+			if (at > sip && gt > at) {
+				int end = gt;
+				int semi = line.indexOf(';', at);
+				if (semi >= 0 && semi < end)
+					end = semi;
+				line = line.left(sip + 4) + "@" + line.mid(end);
+			}
+		}
+	}
+
+	/* Disable the new account by default. */
+	int gt = line.lastIndexOf('>');
+	if (gt >= 0)
+		line.insert(gt + 1, ";enabled=no");
+
+	return line;
+}
+
+/** Rewrite the user part of account `index`'s AOR:
+ *  <sip:USER@domain[:port];uri-params>. Returns true on success. */
+static bool updateAccountsUser(const QString &user, int index)
+{
+	QString path = homeBaresip() + "/accounts";
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return false;
+
+	QStringList lines;
+	while (!f.atEnd())
+		lines << QString::fromUtf8(f.readLine());
+	f.close();
+
+	bool modified = false;
+	forEachAccountLine(lines, index, [&](QString &line) {
+		int lt = line.indexOf('<');
+		int sip = line.indexOf("sip:", lt);
+		int at = line.indexOf('@', sip);
+		if (lt >= 0 && sip > lt && at > sip) {
+			line.replace(sip + 4, at - sip - 4, user);
+			modified = true;
+		}
+	});
+
+	if (!modified)
+		return false;
+
+	return writeAccounts(lines);
+}
+
+
 /* ---- dialog -------------------------------------------------------- */
 
 SettingsDialog::SettingsDialog(QWidget *parent)
@@ -368,6 +498,7 @@ QWidget *SettingsDialog::buildAccountPage(AccountWidgets &w,
 	w.authPass    = new QLineEdit(page);
 	w.authPass->setEchoMode(QLineEdit::Password);
 	w.sipDomain   = new QLineEdit(page);
+	w.sipDomain->setPlaceholderText("[sipdomain]:[port]");
 	w.regint      = new QSpinBox(page);
 	w.regint->setRange(0, 86400);
 	w.regint->setSuffix(" s");
@@ -439,11 +570,25 @@ void SettingsDialog::buildUi()
 	auto *layout = new QVBoxLayout(panel);
 	auto *tabs = new QTabWidget(panel);
 	layout->addWidget(tabs);
+	tabs_ = tabs;
 
 	/* ---- Account tabs (one per accounts-file line) ---- */
-	for (int i = 0; i < kMaxAccounts; ++i)
+	int nAccounts = qMin(countAccountLines(), kMaxAccounts);
+	for (int i = 0; i < nAccounts; ++i)
 		tabs->addTab(buildAccountPage(accounts_[i], tabs),
 			     QString("Account %1").arg(i + 1));
+
+	/* ---- "+" button in the tab header row (top-right corner) ---- */
+	addTabBtn_ = new QPushButton("+", tabs);
+	addTabBtn_->setFixedSize(20, 20);
+	addTabBtn_->setToolTip("Add account");
+	addTabBtn_->setStyleSheet(
+		"QPushButton { border: none; font-size: 16px;"
+		"              font-weight: bold; padding: 0; }"
+		"QPushButton:hover { color: palette(highlight); }");
+	tabs->setCornerWidget(addTabBtn_, Qt::TopRightCorner);
+	connect(addTabBtn_, &QPushButton::clicked,
+		this, &SettingsDialog::onAddAccount);
 
 	/* ---- Audio tab ---- */
 	auto *audioTab = new QWidget(tabs);
@@ -469,6 +614,7 @@ void SettingsDialog::buildUi()
 	aform->addRow("Audio player:",  audioPlayer_);
 
 	tabs->addTab(audioTab, "Audio");
+	updateAddTabVisibility();
 
 	/* ---- Button row ---- */
 	auto *btnRow = new QHBoxLayout();
@@ -574,8 +720,30 @@ void SettingsDialog::loadSettings()
 
 void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 {
-	if (accountLine(index).isEmpty())
-		return;
+	QString existingLine = accountLine(index);
+
+	if (existingLine.isEmpty()) {
+		/* New account added via the "+" button: build a template
+		 * from the duplicated origLine and append it, then fall
+		 * through to the normal param-update path. Skip if the
+		 * user hasn't filled in the domain yet. */
+		QString sd = w.sipDomain->text().trimmed();
+		if (sd.isEmpty() || sd == "[sipdomain]:[port]")
+			return;
+
+		QString baseLine = w.origLine;
+		if (baseLine.isEmpty())
+			baseLine = "<sip:@" + sd + ">";
+		else
+			baseLine = blankAccountFromLast(baseLine);
+
+		appendAccountLine(baseLine);
+
+		/* Set the AOR user part from the auth user field. */
+		QString au = w.authUser->text().trimmed();
+		if (!au.isEmpty())
+			updateAccountsUser(au, index);
+	}
 
 	/* Persist to ~/.baresip/accounts (update known params in-place,
 	 * preserving unknown params like outbound, 100rel, etc.), then
@@ -676,4 +844,57 @@ void SettingsDialog::onOk()
 void SettingsDialog::onCancel()
 {
 	reject();
+}
+
+
+void SettingsDialog::onAddAccount()
+{
+	int n = tabs_->count() - 1; /* exclude Audio tab */
+	if (n >= kMaxAccounts)
+		return;
+
+	/* Build the page first so the AccountWidgets fields exist. */
+	AccountWidgets &dst = accounts_[n];
+	tabs_->insertTab(n, buildAccountPage(dst, tabs_),
+			 QString("Account %1").arg(n + 1));
+
+	/* Duplicate the last account's loaded values into the new tab. */
+	if (n > 0) {
+		AccountWidgets &src = accounts_[n - 1];
+		dst.enabled->setChecked(src.enabled->isChecked());
+		dst.regint->setValue(src.regint->value());
+		dst.stunHost->setText(src.stunHost->text());
+		dst.stunPort->setValue(src.stunPort->value());
+		dst.stunUser->setText(src.stunUser->text());
+		dst.stunPass->setText(src.stunPass->text());
+		dst.answermode->setCurrentIndex(src.answermode->currentIndex());
+		dst.mediaenc->setCurrentIndex(src.mediaenc->currentIndex());
+		dst.medianat->setCurrentIndex(src.medianat->currentIndex());
+		dst.audioCodecs->setText(src.audioCodecs->text());
+		dst.origLine = src.origLine;
+	} else {
+		dst.enabled->setChecked(true);
+		dst.regint->setValue(600);
+		dst.stunPort->setValue(3478);
+		dst.answermode->setCurrentIndex(0);
+		dst.mediaenc->setCurrentIndex(0);
+		dst.medianat->setCurrentIndex(0);
+		dst.origLine.clear();
+	}
+
+	/* Blank the identity fields and guide the SIP domain. */
+	dst.displayName->clear();
+	dst.authUser->clear();
+	dst.authPass->clear();
+	dst.sipDomain->setText("[sipdomain]:[port]");
+
+	tabs_->setCurrentIndex(n);
+	updateAddTabVisibility();
+}
+
+
+void SettingsDialog::updateAddTabVisibility()
+{
+	int n = tabs_->count() - 1; /* exclude Audio tab */
+	addTabBtn_->setVisible(n < kMaxAccounts);
 }
