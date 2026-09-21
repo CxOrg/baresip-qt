@@ -577,28 +577,39 @@ void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 	/* Persist to ~/.baresip/accounts (update known params in-place,
 	 * preserving unknown params like outbound, 100rel, etc.), then
 	 * apply in-process below. */
+	/* Trim leading/trailing whitespace from every field value;
+	 * display name keeps internal spaces. */
+	QString displayName = w.displayName->text().trimmed();
+	QString authUser    = w.authUser->text().trimmed();
+	QString authPass    = w.authPass->text().trimmed();
+	QString stunHost    = w.stunHost->text().trimmed();
+	QString stunUser   = w.stunUser->text().trimmed();
+	QString stunPass   = w.stunPass->text().trimmed();
+	QString audioCodecs= w.audioCodecs->text().trimmed();
+	QString sipDomain  = w.sipDomain->text().trimmed();
+
 	QMap<QString, QString> updates;
 	updates["enabled"] = w.enabled->isChecked() ? "yes" : "no";
-	if (!w.displayName->text().isEmpty())
-		updates["displayname"] = w.displayName->text();
-	if (!w.authUser->text().isEmpty())
-		updates["auth_user"] = w.authUser->text();
-	if (!w.authPass->text().isEmpty())
-		updates["auth_pass"] = w.authPass->text();
+	if (!displayName.isEmpty())
+		updates["displayname"] = displayName;
+	if (!authUser.isEmpty())
+		updates["auth_user"] = authUser;
+	if (!authPass.isEmpty())
+		updates["auth_pass"] = authPass;
 	updates["regint"] = QString::number(w.regint->value());
-	if (!w.stunHost->text().isEmpty()) {
+	if (!stunHost.isEmpty()) {
 		/* baresip expects "stun:[user@]host[:port]" — the '@'
 		 * is required even with no user (stun:@host). Strip a
 		 * leading '@' from the field so it can't double up. */
-		QString host = w.stunHost->text();
+		QString host = stunHost;
 		if (host.startsWith('@'))
 			host = host.mid(1);
-		QString ss = "stun:" + w.stunUser->text() + "@" + host;
+		QString ss = "stun:" + stunUser + "@" + host;
 		if (w.stunPort->value() != 3478)
 			ss += QString(":%1").arg(w.stunPort->value());
 		updates["stunserver"] = ss;
-		if (!w.stunPass->text().isEmpty())
-			updates["stunpass"] = w.stunPass->text();
+		if (!stunPass.isEmpty())
+			updates["stunpass"] = stunPass;
 	}
 	updates["answermode"] = answermodeToString(
 		w.answermode->currentData().toInt());
@@ -606,15 +617,15 @@ void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 		updates["mediaenc"] = w.mediaenc->currentText();
 	if (w.medianat->currentText() != "none")
 		updates["medianat"] = w.medianat->currentText();
-	if (!w.audioCodecs->text().isEmpty())
-		updates["audio_codecs"] = w.audioCodecs->text();
+	if (!audioCodecs.isEmpty())
+		updates["audio_codecs"] = audioCodecs;
 
 	updateAccountsParams(updates, index);
 
 	/* The SIP domain lives inside the <sip:user@domain> AOR, not in
 	 * a ;param — update it separately. */
-	if (!w.sipDomain->text().isEmpty())
-		updateAccountsDomain(w.sipDomain->text(), index);
+	if (!sipDomain.isEmpty())
+		updateAccountsDomain(sipDomain, index);
 
 	/* Apply in-process: nothing to do when the line is unchanged. */
 	QString newLine = accountLine(index);
