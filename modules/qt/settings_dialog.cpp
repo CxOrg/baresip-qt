@@ -307,7 +307,10 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 		"QFrame#settingsPanel {"
 		"  background-color: palette(window);"
 		"  border: 2px solid palette(dark);"
-		"  border-radius: 8px; }");
+		"  border-radius: 8px; }"
+		/* Input fields in the account tabs: 3px taller than default. */
+		"QLineEdit, QSpinBox, QComboBox {"
+		"  padding-top: 1px; padding-bottom: 2px; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
