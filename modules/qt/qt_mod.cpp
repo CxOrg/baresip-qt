@@ -81,9 +81,10 @@ QString accountLabel(struct ua *ua)
  *  from plasmashell's evaluateScript() D-Bus API. Needed because
  *  dodge/autohide panels don't reserve an available-geometry strut.
  *  `isBottom` reports whether that panel sits on the bottom screen
- *  edge. Returns 0 when plasmashell is unreachable or reports
+ *  edge, `centerX` the tray widget's horizontal centre (-1 when
+ *  unknown). Returns 0 when plasmashell is unreachable or reports
  *  nothing. */
-static int queryTrayPanel(QScreen *screen, bool *isBottom)
+static int queryTrayPanel(QScreen *screen, bool *isBottom, int *centerX)
 {
 	QDBusInterface iface(QStringLiteral("org.kde.plasmashell"),
 		QStringLiteral("/PlasmaShell"),
@@ -93,16 +94,19 @@ static int queryTrayPanel(QScreen *screen, bool *isBottom)
 		return 0;
 
 	/* evaluateScript() returns whatever the script prints. Emit
-	 * "screenIndex:location:height" for each panel containing the
-	 * org.kde.plasma.systemtray widget. */
+	 * "screenIndex:location:height:centerX" for each panel
+	 * containing the org.kde.plasma.systemtray widget; centerX is
+	 * the tray widget's horizontal centre in screen coordinates
+	 * (widget.geometry is screen-relative). */
 	static const char script[] =
 		"for (var i=0;i<panelIds.length;i++){"
 		"var p=panelById(panelIds[i]);"
-		"var ws=p.widgets(); var t=false;"
+		"var ws=p.widgets(); var t=false; var g=null;"
 		"for (var j=0;j<ws.length;j++)"
 		"if (ws[j].type==='org.kde.plasma.systemtray')"
-		"{t=true;break;}"
-		"if (t) print(p.screen+':'+p.location+':'+p.height);}";
+		"{t=true;g=ws[j].geometry;break;}"
+		"if (t) print(p.screen+':'+p.location+':'+p.height+':'+"
+		"(g?Math.round(g.x+g.width/2):-1));}";
 
 	QDBusReply<QString> r = iface.call(QStringLiteral("evaluateScript"),
 					   QLatin1String(script));
@@ -112,26 +116,30 @@ static int queryTrayPanel(QScreen *screen, bool *isBottom)
 	/* Prefer a panel on the anchor's screen (panel.screen == -1
 	 * means unassigned); otherwise any tray panel. */
 	int target = screen ? QGuiApplication::screens().indexOf(screen) : 0;
-	int hAny = 0, hScr = 0;
+	int hAny = 0, hScr = 0, cxAny = -1, cxScr = -1;
 	bool bAny = false, bScr = false;
 	for (const QString &line : r.value().split('\n', Qt::SkipEmptyParts)) {
 		QStringList kv = line.trimmed().split(':');
-		if (kv.size() != 3)
+		if (kv.size() != 4)
 			continue;
-		int scr = kv[0].toInt(), h = kv[2].toInt();
+		int scr = kv[0].toInt(), h = kv[2].toInt(), cx = kv[3].toInt();
 		bool bottom = (kv[1] == QLatin1String("bottom"));
 		if (h > hAny) {
 			hAny = h;
 			bAny = bottom;
+			cxAny = cx;
 		}
 		if ((scr == target || scr == -1) && h > hScr) {
 			hScr = h;
 			bScr = bottom;
+			cxScr = cx;
 		}
 	}
 
 	if (isBottom)
 		*isBottom = hScr > 0 ? bScr : bAny;
+	if (centerX)
+		*centerX = hScr > 0 ? cxScr : cxAny;
 	return hScr > 0 ? hScr : hAny;
 }
 
@@ -150,22 +158,30 @@ QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
 	QRect avail = screen ? screen->availableGeometry() : full;
 
-	/* Anchor to the screen edge on the tray icon's half of the
-	 * screen: left half anchors left, otherwise right. */
-	bool left = !anchorPos.isNull() &&
-		anchorPos.x() < full.center().x();
-	if (anchorLeft)
-		*anchorLeft = left;
-	int side = left ? 8 : 0, other = left ? 0 : 8;
-
 	/* Vertical margin = tray-panel height + 16px gap, applied on
 	 * the edge the tray panel sits on. The geometry strut covers
 	 * reserve-space panels; the D-Bus query covers dodge/autohide
-	 * panels which leave no strut. */
+	 * panels which leave no strut. The query also returns the tray
+	 * widget's centre-x in screen coordinates. */
 	bool bottom = false;
-	int trayH = queryTrayPanel(screen, &bottom);
+	int trayCx = -1;
+	int trayH = queryTrayPanel(screen, &bottom, &trayCx);
 	if (anchorBottom)
 		*anchorBottom = bottom;
+
+	/* Anchor to the screen edge on the tray's half of the screen.
+	 * Prefer the tray widget's real position from D-Bus -- under
+	 * Wayland QCursor::pos() can't be queried, so anchorPos is a
+	 * fallback only (X11 or first-open before any click). */
+	bool left;
+	if (trayCx >= 0)
+		left = trayCx < full.center().x();
+	else
+		left = !anchorPos.isNull() &&
+			anchorPos.x() < full.center().x();
+	if (anchorLeft)
+		*anchorLeft = left;
+	int side = left ? 8 : 0, other = left ? 0 : 8;
 
 	if (bottom) {
 		int b = qMax(full.bottom() - avail.bottom(), trayH) + 16;
