@@ -233,6 +233,16 @@ static bool validNumber(const QString &s)
 }
 
 
+/** True when the edit field holds a SIP URI rather than a bare
+ *  number — "sip:alice@host", "sips:..." or "alice@host". */
+static bool isUriInput(const QString &s)
+{
+	return s.contains('@') ||
+		s.startsWith("sip:", Qt::CaseInsensitive) ||
+		s.startsWith("sips:", Qt::CaseInsensitive);
+}
+
+
 void ContactsDialog::buildUi()
 {
 	auto *outer = new QVBoxLayout(this);
@@ -315,9 +325,12 @@ void ContactsDialog::reloadContacts()
 			if (parseContactLine(line, e)) {
 				QString number = uriToNumber(
 					e.uri.toUtf8().constData());
-				QString label = e.name.isEmpty()
+				QString target = isDialNumber(number)
 					? number
-					: QString("%1  %2").arg(e.name, number);
+					: uriToFull(e.uri.toUtf8().constData());
+				QString label = e.name.isEmpty()
+					? target
+					: QString("%1  %2").arg(e.name, target);
 				auto *item = new QListWidgetItem(label);
 				item->setData(Qt::UserRole, entries_.size());
 				contactsList_->addItem(item);
@@ -336,20 +349,22 @@ void ContactsDialog::reloadHistory()
 {
 	historyList_->clear();
 
-	/* Unique numbers (most recent first) with a call count. */
+	/* Unique targets (most recent first) with a call count — the
+	 * dial number when present, else the full SIP URI. */
 	QStringList order;
 	QMap<QString, int> counts;
 	QMap<QString, QString> names;
 	QList<CallHistoryEntry> entries = CallHistory::instance()->recent(200);
 	for (int i = entries.size() - 1; i >= 0; --i) {
 		const CallHistoryEntry &e = entries[i];
-		if (e.uri.isEmpty())
+		QString target = e.target();
+		if (target.isEmpty())
 			continue;
-		counts[e.uri]++;
-		if (!e.info.isEmpty() && !names.contains(e.uri))
-			names[e.uri] = e.info;
-		if (!order.contains(e.uri))
-			order.append(e.uri);
+		counts[target]++;
+		if (!e.info.isEmpty() && !names.contains(target))
+			names[target] = e.info;
+		if (!order.contains(target))
+			order.append(target);
 	}
 
 	for (const QString &uri : order) {
@@ -423,8 +438,11 @@ void ContactsDialog::onContactClicked(QListWidgetItem *item)
 		return;
 
 	const ContactEntry &e = entries_[editingIndex_];
+	QString number = uriToNumber(e.uri.toUtf8().constData());
 	cNameEdit_->setText(e.name);
-	cNumEdit_->setText(uriToNumber(e.uri.toUtf8().constData()));
+	cNumEdit_->setText(isDialNumber(number)
+		? number
+		: uriToFull(e.uri.toUtf8().constData()));
 	contactsStack_->setCurrentIndex(1);
 }
 
@@ -441,9 +459,10 @@ void ContactsDialog::onSaveContactEdit()
 {
 	QString name   = cNameEdit_->text().trimmed();
 	QString number = cNumEdit_->text().trimmed();
-	if (!validNumber(number)) {
+	bool uriInput = isUriInput(number);
+	if (!uriInput && !validNumber(number)) {
 		QMessageBox::warning(this, "Invalid number",
-			"Enter a number with at least 4 digits.");
+			"Enter a number or a sip: URI (min. 4 digits).");
 		return;
 	}
 
@@ -452,14 +471,18 @@ void ContactsDialog::onSaveContactEdit()
 		ContactEntry &e = entries_[editingIndex_];
 		QString oldNumber = uriToNumber(e.uri.toUtf8().constData());
 		e.name = name;
-		if (number != oldNumber)
+		if (uriInput)
+			e.uri = uriToFull(number.toUtf8().constData());
+		else if (number != oldNumber)
 			e.uri = completeUri(number, uriHost(e.uri));
 	}
 	else {
 		/* Add mode (Add button): append a new contact. */
 		ContactEntry e;
 		e.name = name;
-		e.uri  = completeUri(number, QString());
+		e.uri  = uriInput
+			? uriToFull(number.toUtf8().constData())
+			: completeUri(number, QString());
 		entries_.append(e);
 	}
 
@@ -487,15 +510,18 @@ void ContactsDialog::onSaveHistoryContact()
 {
 	QString name   = hNameEdit_->text().trimmed();
 	QString number = hNumEdit_->text().trimmed();
-	if (!validNumber(number)) {
+	bool uriInput = isUriInput(number);
+	if (!uriInput && !validNumber(number)) {
 		QMessageBox::warning(this, "Invalid number",
-			"Enter a number with at least 4 digits.");
+			"Enter a number or a sip: URI (min. 4 digits).");
 		return;
 	}
 
 	ContactEntry e;
 	e.name   = name;
-	e.uri    = completeUri(number, QString());
+	e.uri    = uriInput
+		? uriToFull(number.toUtf8().constData())
+		: completeUri(number, QString());
 	entries_.append(e);
 
 	saveContacts();

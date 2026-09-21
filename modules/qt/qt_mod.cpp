@@ -58,6 +58,43 @@ QString uriToNumber(const char *uri)
 }
 
 
+bool isDialNumber(const QString &s)
+{
+	bool digit = false;
+	for (const QChar &c : s) {
+		if (c.isDigit()) {
+			digit = true;
+			continue;
+		}
+		if (c != '+' && c != '*' && c != '#' && c != ' ' &&
+		    c != '-' && c != '(' && c != ')' && c != '.')
+			return false;
+	}
+	return digit;
+}
+
+
+QString uriToFull(const char *uri)
+{
+	QString s = QString::fromUtf8(uri).trimmed();
+
+	int lt = s.indexOf('<');
+	int gt = s.indexOf('>');
+	if (lt >= 0 && gt > lt)
+		s = s.mid(lt + 1, gt - lt - 1);
+
+	if (!s.startsWith("sip:", Qt::CaseInsensitive) &&
+	    !s.startsWith("sips:", Qt::CaseInsensitive))
+		s.prepend("sip:");
+
+	int semi = s.indexOf(';');
+	if (semi >= 0)
+		s = s.left(semi);
+
+	return s;
+}
+
+
 /** Account menu label: "<display name>  sip:<user>" — the
  *  @domain part of the AOR is suppressed. Returns just
  *  "sip:<user>" when the account has no display name.
@@ -294,14 +331,21 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		break;
 
 	case BEVENT_CALL_INCOMING:
+	{
 		/* Log incoming calls at ringing, even if they are
 		 * rejected/hangup before being answered. Mirrors the
 		 * outgoing-call logging at BEVENT_CALL_OUTGOING.
-		 * Store just the phone number; the full SIP URI is
-		 * reconstructed on dialing. */
+		 * History stores the dial number (when the user part
+		 * is a phone number) and the full SIP URI. */
+		QString peerNum = uriToNumber(call_peeruri(call));
+		if (!isDialNumber(peerNum))
+			peerNum.clear();
+		QString peerFull = uriToFull(call_peeruri(call));
+
 		QMetaObject::invokeMethod(mod->tray, "addHistory",
 			Qt::QueuedConnection,
-			Q_ARG(QString, uriToNumber(call_peeruri(call))),
+			Q_ARG(QString, peerNum),
+			Q_ARG(QString, peerFull),
 			Q_ARG(int, CALL_INCOMING),
 			Q_ARG(QString,
 				QString::fromUtf8(call_peername(call))));
@@ -309,21 +353,28 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		QMetaObject::invokeMethod(mod->tray, "callIncoming",
 			Qt::QueuedConnection,
 			Q_ARG(quintptr, reinterpret_cast<quintptr>(call)),
-			Q_ARG(QString, uriToNumber(call_peeruri(call))),
+			Q_ARG(QString,
+				peerNum.isEmpty() ? peerFull : peerNum),
 			Q_ARG(QString, QString::fromUtf8(call_peername(call))));
 		break;
+	}
 
 	case BEVENT_CALL_OUTGOING:
-		/* Log dialed numbers immediately, even if the call never
-		 * connects. Store just the phone number; the full SIP URI
-		 * is reconstructed on dialing. */
+	{
+		QString peerNum = uriToNumber(call_peeruri(call));
+		if (!isDialNumber(peerNum))
+			peerNum.clear();
+		QString peerFull = uriToFull(call_peeruri(call));
+
 		QMetaObject::invokeMethod(mod->tray, "addHistory",
 			Qt::QueuedConnection,
-			Q_ARG(QString, uriToNumber(call_peeruri(call))),
+			Q_ARG(QString, peerNum),
+			Q_ARG(QString, peerFull),
 			Q_ARG(int, CALL_OUTGOING),
 			Q_ARG(QString,
 				QString::fromUtf8(call_peername(call))));
 		break;
+	}
 
 	case BEVENT_CALL_CLOSED:
 	{
@@ -340,7 +391,7 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 					"updateHistoryDuration",
 					Qt::QueuedConnection,
 					Q_ARG(QString,
-						uriToNumber(call_peeruri(call))),
+						uriToFull(call_peeruri(call))),
 					Q_ARG(uint, dur));
 			}
 		}
@@ -521,12 +572,27 @@ void qt_mod_connect(const char *uri)
 	struct pl url_pl;
 	int err;
 
-	pl_set_str(&url_pl, uri);
-
-	err = account_uri_complete_strdup(ua_account(qt_current_ua()),
-					   &uric, &url_pl);
-	if (err)
-		return;
+	QString in = QString::fromUtf8(uri).trimmed();
+	if (in.contains('@') || in.startsWith("sip:", Qt::CaseInsensitive)
+	    || in.startsWith("sips:", Qt::CaseInsensitive)) {
+		/* A full SIP URI (e.g. a foreign-domain address from
+		 * history or contacts) is dialed directly — account
+		 * domain completion must not rewrite it. */
+		if (!in.startsWith("sip:", Qt::CaseInsensitive) &&
+		    !in.startsWith("sips:", Qt::CaseInsensitive))
+			in.prepend("sip:");
+		if (str_dup(&uric, in.toUtf8().constData()))
+			return;
+	}
+	else {
+		/* Bare number: complete it with the selected
+		 * account's domain. */
+		pl_set_str(&url_pl, uri);
+		err = account_uri_complete_strdup(
+			ua_account(qt_current_ua()), &uric, &url_pl);
+		if (err)
+			return;
+	}
 
 	mqueue_push(qt_mod_obj.mq, MQ_CONNECT, uric);
 }
@@ -649,7 +715,11 @@ static int qtdial_handler(struct re_printf *pf, void *arg)
 	if (!str_isset(carg->prm))
 		return EINVAL;
 
+	/* tel: links carry a dial number; sip: URIs keep their full
+	 * address so foreign domains survive to the dial field. */
 	QString number = uriToNumber(carg->prm);
+	if (!isDialNumber(number))
+		number = uriToFull(carg->prm);
 	if (number.isEmpty())
 		return EINVAL;
 

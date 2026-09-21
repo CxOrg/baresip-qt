@@ -189,6 +189,11 @@ void TrayApp::populateContacts()
 		 * the dial field; the full URI is reconstructed on
 		 * dialing (account_uri_complete_strdup). */
 		QString number = uriToNumber(contact_uri(c));
+		/* Dial target: the bare number for dialable contacts,
+		 * the full sip: URI for foreign-address contacts. */
+		QString target = isDialNumber(number)
+			? number
+			: uriToFull(contact_uri(c));
 		QString name;
 		const struct sip_addr *addr = contact_addr(c);
 		if (addr && pl_isset(&addr->dname))
@@ -197,11 +202,11 @@ void TrayApp::populateContacts()
 				.remove('"').trimmed();
 
 		QString label = name.isEmpty()
-			? number
-			: QString("%1  %2").arg(name, number);
+			? target
+			: QString("%1  %2").arg(name, target);
 
 		QAction *act = contactsMenu_->addAction(label);
-		act->setData(number);
+		act->setData(target);
 		connect(act, &QAction::triggered, this, [this, act]() {
 			onDialContact(act);
 		});
@@ -743,21 +748,23 @@ void TrayApp::populateHistoryMenu()
 	auto entries = CallHistory::instance()->recent(20);
 	for (const CallHistoryEntry &e : entries)
 		historyMenu_->addAction(makeHistoryAction(
-			e.uri, e.type, e.info, e.ts, e.duration));
+			e.target(), e.type, e.info, e.ts, e.duration));
 
 	historyLength_ = entries.size();
 }
 
 
-void TrayApp::addHistory(QString uri, int callType, QString info)
+void TrayApp::addHistory(QString number, QString uri, int callType,
+			 QString info)
 {
 	/* Persist to ~/.baresip/call_history.csv and refresh the idle
 	 * CallDialog's history list if it's open. */
-	CallHistory::instance()->add(uri, callType, info);
+	CallHistory::instance()->add(number, uri, callType, info);
 	if (idleCallDialog_)
 		idleCallDialog_->refreshHistory();
 
-	QAction *act = makeHistoryAction(uri, callType, info,
+	QString target = number.isEmpty() ? uri : number;
+	QAction *act = makeHistoryAction(target, callType, info,
 					 QDateTime::currentDateTime(), 0);
 
 	if (historyLength_ >= 20) {

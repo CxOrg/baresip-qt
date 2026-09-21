@@ -75,9 +75,15 @@ void CallHistory::load()
 		CallHistoryEntry e;
 		e.ts   = QDateTime::fromString(parts[0], Qt::ISODate);
 		e.type = parts[1].toInt();
-		e.uri  = parts[2];
+		e.number = parts[2];
 		e.info = parts[3];
-		e.duration = parts.size() > 4 ? parts[4].toUInt() : 0;
+
+		/* Tail after the 4th comma: "duration[,uri]" — the uri
+		 * column was appended later and is absent in old files. */
+		QString tail = parts.size() > 4 ? parts[4] : QString();
+		int c = tail.indexOf(',');
+		e.duration = (c < 0 ? tail : tail.left(c)).toUInt();
+		e.uri = c < 0 ? QString() : tail.mid(c + 1);
 
 		/* Unescape commas in info. */
 		e.info.replace("\\,", ",");
@@ -103,9 +109,12 @@ void CallHistory::save() const
 		info.replace(",", "\\,");
 		out << e.ts.toString(Qt::ISODate) << ","
 		    << e.type << ","
-		    << e.uri << ","
+		    << e.number << ","
 		    << info << ","
-		    << e.duration << "\n";
+		    << e.duration;
+		if (!e.uri.isEmpty())
+			out << "," << e.uri;
+		out << "\n";
 	}
 
 	out.flush();
@@ -113,11 +122,13 @@ void CallHistory::save() const
 }
 
 
-void CallHistory::add(const QString &uri, int type, const QString &info)
+void CallHistory::add(const QString &number, const QString &uri,
+		      int type, const QString &info)
 {
 	CallHistoryEntry e;
 	e.ts   = QDateTime::currentDateTime();
 	e.type = type;
+	e.number = number;
 	e.uri  = uri;
 	e.info = info;
 	e.duration = 0;
@@ -135,10 +146,14 @@ void CallHistory::add(const QString &uri, int type, const QString &info)
 
 void CallHistory::updateDuration(const QString &uri, uint32_t duration)
 {
-	/* Find the most recent entry matching this URI and update
-	 * its duration. Searches backwards from the end. */
+	/* Find the most recent entry matching this peer and update
+	 * its duration. Entries written before the uri column existed
+	 * match on the number instead. Searches backwards. */
+	QString num = uriToNumber(uri.toUtf8().constData());
 	for (int i = entries_.size() - 1; i >= 0; --i) {
-		if (entries_[i].uri == uri) {
+		if (entries_[i].uri == uri ||
+		    (entries_[i].uri.isEmpty() &&
+		     entries_[i].number == num)) {
 			entries_[i].duration = duration;
 			save();
 			emit changed();

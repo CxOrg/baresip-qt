@@ -539,6 +539,10 @@ void CallDialog::refreshHistory()
 			break;
 		}
 
+		/* Display/dial target: the number when the peer has a
+		 * dialable number, else the full SIP URI. */
+		QString target = e.target();
+
 		QString label;
 		if (e.duration > 0) {
 			/* Format duration as M:SS */
@@ -548,13 +552,13 @@ void CallDialog::refreshHistory()
 				.arg(mins)
 				.arg(secs, 2, 10, QChar('0'));
 			label = e.info.isEmpty()
-				? QString("%1  (%3)  %2").arg(e.uri,
+				? QString("%1  (%3)  %2").arg(target,
 					e.ts.toString("MM-dd hh:mm"), dur)
 				: QString("%1  (%3)  %2").arg(e.info,
 					e.ts.toString("MM-dd hh:mm"), dur);
 		} else {
 			label = e.info.isEmpty()
-				? QString("%1  %2").arg(e.uri,
+				? QString("%1  %2").arg(target,
 					e.ts.toString("MM-dd hh:mm"))
 				: QString("%1  %2").arg(e.info,
 					e.ts.toString("MM-dd hh:mm"));
@@ -566,10 +570,10 @@ void CallDialog::refreshHistory()
 			ic = QIcon::fromTheme(fallback);
 		if (!ic.isNull())
 			item->setIcon(ic);
-		/* Stash the number for click-to-fill. The history CSV now
-		 * stores just the phone number; the full SIP URI is
-		 * reconstructed by qt_mod_connect on dialing. */
-		item->setData(Qt::UserRole, e.uri);
+		/* Stash the target for click-to-fill — a bare number is
+		 * completed with the account domain on dialing, a full
+		 * sip: URI is dialed directly. */
+		item->setData(Qt::UserRole, target);
 		historyList_->addItem(item);
 	}
 }
@@ -621,15 +625,18 @@ void CallDialog::refreshContacts()
 
 	historyList_->clear();
 
-	/* Same format as the tray "Call Contact" menu: "Name  number",
-	 * with the bare number stashed for click-to-fill. The full SIP
-	 * URI is reconstructed on dialing. */
+	/* Same format as the tray "Call Contact" menu: "Name  target",
+	 * where target is the bare number for dialable contacts or the
+	 * full sip: URI for foreign addresses. */
 	struct contacts *contacts = baresip_contacts();
 	struct le *le;
 	for (le = list_head(contact_list(contacts)); le; le = le->next) {
 		struct contact *c = static_cast<struct contact *>(le->data);
 
 		QString number = uriToNumber(contact_uri(c));
+		QString target = isDialNumber(number)
+			? number
+			: uriToFull(contact_uri(c));
 		QString name;
 		const struct sip_addr *addr = contact_addr(c);
 		if (addr && pl_isset(&addr->dname))
@@ -638,11 +645,11 @@ void CallDialog::refreshContacts()
 				.remove('"').trimmed();
 
 		QString label = name.isEmpty()
-			? number
-			: QString("%1  %2").arg(name, number);
+			? target
+			: QString("%1  %2").arg(name, target);
 
 		auto *item = new QListWidgetItem(label);
-		item->setData(Qt::UserRole, number);
+		item->setData(Qt::UserRole, target);
 		historyList_->addItem(item);
 	}
 }

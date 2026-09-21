@@ -40,7 +40,8 @@ public slots:
 	void callClosed(quintptr callPtr, bool missed,
 			 QString peerUri, QString peerName);
 	void callEstablished(quintptr callPtr);
-	void addHistory(QString uri, int callType, QString info);
+	void addHistory(QString number, QString uri, int callType,
+			QString info);
 	void updateHistoryDuration(QString uri, uint duration);
 	void showWarning(QString title, QString text);
 	/* Opens the dial panel with a number pre-filled (tel: links via

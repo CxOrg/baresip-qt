@@ -87,6 +87,15 @@ struct ua *qt_current_ua(void);
 /** Strip a SIP URI down to the dial number ("sip:1234@host" -> "1234"). */
 QString uriToNumber(const char *uri);
 
+/** True when s looks like a dialable phone number (digits plus tel
+ *  formatting chars, at least one digit). SIP user parts like
+ *  "alice" are not dial numbers. */
+bool isDialNumber(const QString &s);
+
+/** Canonical "sip:user@host[:port]" form of a peer URI: strips any
+ *  display name/<...> wrapper and ;params, ensures a sip: scheme. */
+QString uriToFull(const char *uri);
+
 /** Account menu label: "<display name>  sip:<user>". */
 QString accountLabel(struct ua *ua);
 
