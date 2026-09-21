@@ -15,6 +15,8 @@
 #include <QDateTime>
 #include <QApplication>
 #include <QCursor>
+#include <QFile>
+#include <QDir>
 
 
 TrayApp::TrayApp(struct qt_mod *mod, QObject *parent)
@@ -71,6 +73,16 @@ void TrayApp::refreshTrayMenu()
 }
 
 
+/** Path to the persisted presence state (~/.baresip/presence). */
+static QString presencePath()
+{
+	QString home = QString::fromLocal8Bit(qgetenv("HOME"));
+	if (home.isEmpty())
+		home = QDir::homePath();
+	return home + "/.baresip/presence";
+}
+
+
 /** Small filled-circle icon used as the presence status spot. */
 static QIcon spotIcon(const QColor &color)
 {
@@ -90,17 +102,26 @@ void TrayApp::buildMenu()
 	menu_ = new QMenu();
 
 	/* User Presence: a single toggle with a green/red spot.
-	 * Defaults to available — baresip's default is CLOSED, so
-	 * push OPEN to every account instead of reading it back. */
+	 * Restores the last chosen state (default: available) and
+	 * applies it to every loaded account — baresip's own
+	 * default is CLOSED, so always push the state. */
 	presenceAct_ = menu_->addAction("User Presence");
 	connect(presenceAct_, &QAction::triggered,
 		this, &TrayApp::onPresenceToggled);
 	presenceOpen_ = true;
+	{
+		QFile f(presencePath());
+		if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+			presenceOpen_ = QString::fromUtf8(f.readAll())
+				.trimmed() != "closed";
+	}
 	for (struct le *le = list_head(uag_list()); le; le = le->next) {
 		struct ua *ua = static_cast<struct ua *>(le->data);
-		ua_presence_status_set(ua, PRESENCE_OPEN);
+		ua_presence_status_set(ua,
+			presenceOpen_ ? PRESENCE_OPEN : PRESENCE_CLOSED);
 	}
-	presenceAct_->setIcon(spotIcon(QColor("#4caf50")));
+	presenceAct_->setIcon(spotIcon(presenceOpen_
+		? QColor("#4caf50") : QColor("#e53935")));
 
 	/* Online accounts submenu */
 	accountsMenu_ = menu_->addMenu("Online Accounts");
@@ -358,6 +379,11 @@ void TrayApp::onPresenceToggled()
 		struct ua *ua = static_cast<struct ua *>(le->data);
 		ua_presence_status_set(ua, status);
 	}
+
+	/* Persist the choice so it survives restarts. */
+	QFile f(presencePath());
+	if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+		f.write(presenceOpen_ ? "open\n" : "closed\n");
 
 	presenceAct_->setIcon(spotIcon(presenceOpen_
 		? QColor("#4caf50") : QColor("#e53935")));
