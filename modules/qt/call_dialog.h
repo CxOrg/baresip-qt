@@ -93,7 +93,6 @@ signals:
 	/** Red button clicked. In Dialing: just close. In Incoming:
 	 *  reject the call. In InCall: hang up. */
 	void hangupRequested(quintptr callPtr);
-	void rejectRequested(quintptr callPtr);
 
 	/** User opened the in-call DTMF dialpad. */
 	void dialpadRequested(quintptr callPtr, QString peerLabel);
