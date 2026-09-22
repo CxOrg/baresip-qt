@@ -475,7 +475,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 		"  border-radius: 8px; }"
 		/* Input fields in the account tabs: 3px taller than default. */
 		"QLineEdit, QSpinBox, QComboBox {"
-		"  min-height: 1.0em; }");
+		"  min-height: 0.9em; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
