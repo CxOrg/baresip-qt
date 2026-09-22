@@ -12,6 +12,8 @@
 #include <QTabWidget>
 #include <QFrame>
 #include <QPushButton>
+#include <QToolButton>
+#include <QIcon>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -616,25 +618,42 @@ void SettingsDialog::buildUi()
 	auto *corner = new QWidget(tabs);
 	auto *cornerLay = new QHBoxLayout(corner);
 	cornerLay->setContentsMargins(0, 0, 0, 0);
-	cornerLay->setSpacing(2);
+	cornerLay->setSpacing(4);
 
-	addTabBtn_ = new QPushButton("+", corner);
-	addTabBtn_->setFixedSize(20, 20);
+	/* Circled +/- icons drawn as SVG so they scale crisply and
+	 * carry a visible circle outline (50% larger than the old
+	 * text buttons: 30x30 vs 20x20). */
+	static const char *plusSvg =
+		"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
+		"  <circle cx='12' cy='12' r='10' fill='none' stroke='currentColor'"
+		"          stroke-width='2'/>"
+		"  <line x1='7' y1='12' x2='17' y2='12' stroke='currentColor'"
+		"        stroke-width='2.5' stroke-linecap='round'/>"
+		"  <line x1='12' y1='7' x2='12' y2='17' stroke='currentColor'"
+		"        stroke-width='2.5' stroke-linecap='round'/>"
+		"</svg>";
+	static const char *minusSvg =
+		"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
+		"  <circle cx='12' cy='12' r='10' fill='none' stroke='currentColor'"
+		"          stroke-width='2'/>"
+		"  <line x1='7' y1='12' x2='17' y2='12' stroke='currentColor'"
+		"        stroke-width='2.5' stroke-linecap='round'/>"
+		"</svg>";
+
+	addTabBtn_ = new QToolButton(corner);
+	addTabBtn_->setIcon(QIcon(plusSvg));
+	addTabBtn_->setIconSize(QSize(24, 24));
+	addTabBtn_->setFixedSize(30, 30);
 	addTabBtn_->setToolTip("Add account");
-	addTabBtn_->setStyleSheet(
-		"QPushButton { border: none; font-size: 16px;"
-		"              font-weight: bold; padding: 0; }"
-		"QPushButton:hover { color: palette(highlight); }");
+	addTabBtn_->setAutoRaise(true);
 	cornerLay->addWidget(addTabBtn_);
 
-	removeTabBtn_ = new QPushButton(QString::fromUtf8("\xe2\x88\x92"),
-					corner);
-	removeTabBtn_->setFixedSize(20, 20);
+	removeTabBtn_ = new QToolButton(corner);
+	removeTabBtn_->setIcon(QIcon(minusSvg));
+	removeTabBtn_->setIconSize(QSize(24, 24));
+	removeTabBtn_->setFixedSize(30, 30);
 	removeTabBtn_->setToolTip("Remove this account");
-	removeTabBtn_->setStyleSheet(
-		"QPushButton { border: none; font-size: 16px;"
-		"              font-weight: bold; padding: 0; }"
-		"QPushButton:hover { color: palette(highlight); }");
+	removeTabBtn_->setAutoRaise(true);
 	cornerLay->addWidget(removeTabBtn_);
 
 	tabs->setCornerWidget(corner, Qt::TopRightCorner);
