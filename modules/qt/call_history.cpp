@@ -163,6 +163,22 @@ void CallHistory::updateDuration(const QString &uri, uint32_t duration)
 }
 
 
+bool CallHistory::remove(const QDateTime &ts, const QString &number,
+			 const QString &uri)
+{
+	for (int i = 0; i < entries_.size(); ++i) {
+		const CallHistoryEntry &e = entries_[i];
+		if (e.ts == ts && e.number == number && e.uri == uri) {
+			entries_.removeAt(i);
+			save();
+			emit changed();
+			return true;
+		}
+	}
+	return false;
+}
+
+
 QList<CallHistoryEntry> CallHistory::recent(int n) const
 {
 	QList<CallHistoryEntry> r;

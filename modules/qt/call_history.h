@@ -41,6 +41,11 @@ public:
 	 *  (falls back to matching the number column). */
 	void updateDuration(const QString &uri, uint32_t duration);
 
+	/** Remove the entry matching ts+number+uri; saves and emits
+	 *  changed(). Returns false if no entry matched. */
+	bool remove(const QDateTime &ts, const QString &number,
+		    const QString &uri);
+
 	/** Load the most recent `n` entries from disk. */
 	QList<CallHistoryEntry> recent(int n) const;
 

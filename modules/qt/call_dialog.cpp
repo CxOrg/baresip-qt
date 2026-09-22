@@ -7,12 +7,15 @@
 
 #include <QLineEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QLabel>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QFormLayout>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QPalette>
 #include <QIcon>
 #include <QSystemTrayIcon>
@@ -21,9 +24,127 @@
 #include <QApplication>
 #include <QCursor>
 #include <QWindow>
+#include <QFile>
+#include <QTextStream>
+#include <QDir>
+#include <QResizeEvent>
+#include <QHideEvent>
+#include <algorithm>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
+
+
+/* ---- contacts file helpers (moved from contacts_dialog.cpp) ------- */
+
+static QString contactsPath()
+{
+	return QDir::homePath() + "/.baresip/contacts";
+}
+
+/** Parse a contacts-file line into name/uri/params. Handles
+ *  `"Name" <sip:user@host>;params`, bare `<sip:...>` and plain
+ *  `sip:...` lines. Returns false for comments/blank lines. */
+static bool parseContactLine(const QString &line,
+			     CallDialog::ContactEntry &e)
+{
+	QString t = line.trimmed();
+	if (t.isEmpty() || t.startsWith('#'))
+		return false;
+
+	int lt = t.indexOf('<');
+	int gt = t.indexOf('>', lt);
+	if (lt >= 0 && gt > lt) {
+		e.name = t.left(lt).trimmed();
+		if (e.name.startsWith('"') && e.name.endsWith('"')
+		    && e.name.length() > 1)
+			e.name = e.name.mid(1, e.name.length() - 2);
+		e.uri    = t.mid(lt + 1, gt - lt - 1);
+		e.params = t.mid(gt + 1).trimmed();
+	}
+	else {
+		e.name.clear();
+		e.uri = t;
+		e.params.clear();
+	}
+	return true;
+}
+
+/** Render a ContactEntry back to a contacts-file line. */
+static QString contactLine(const CallDialog::ContactEntry &e)
+{
+	QString line;
+	if (!e.name.isEmpty())
+		line = QString("\"%1\" ").arg(e.name);
+	line += "<" + e.uri + ">";
+	if (!e.params.isEmpty())
+		line += e.params;
+	return line;
+}
+
+/** Host part of a sip URI ("sip:u@host:port;p" -> "host:port"). */
+static QString uriHost(const QString &uri)
+{
+	QString s = uri;
+	if (s.startsWith("sip:", Qt::CaseInsensitive))
+		s = s.mid(4);
+	else if (s.startsWith("sips:", Qt::CaseInsensitive))
+		s = s.mid(5);
+	int at = s.indexOf('@');
+	if (at < 0)
+		return QString();
+	s = s.mid(at + 1);
+	int semi = s.indexOf(';');
+	if (semi >= 0)
+		s = s.left(semi);
+	return s;
+}
+
+/** Build a full sip: URI for a bare number — prefer keeping the
+ *  original host when editing, else complete via the current
+ *  account's domain, else just "sip:<number>". */
+static QString completeUri(const QString &number, const QString &origHost)
+{
+	QString host = origHost;
+	if (!host.isEmpty())
+		return QString("sip:%1@%2").arg(number, host);
+
+	struct ua *ua = qt_current_ua();
+	if (ua) {
+		char *s = NULL;
+		struct pl pl;
+		QByteArray utf8 = number.toUtf8();
+		pl.p = utf8.constData();
+		pl.l = (size_t)utf8.size();
+		if (0 == account_uri_complete_strdup(ua_account(ua),
+						     &s, &pl)) {
+			QString uri = QString::fromUtf8(s);
+			mem_deref(s);
+			return uri;
+		}
+	}
+	return "sip:" + number;
+}
+
+/** A usable contact number needs at least 4 digits. */
+static bool validNumber(const QString &s)
+{
+	int digits = 0;
+	for (const QChar c : s) {
+		if (c.isDigit())
+			++digits;
+	}
+	return digits >= 4;
+}
+
+/** True when the edit field holds a SIP URI rather than a bare
+ *  number — "sip:alice@host", "sips:..." or "alice@host". */
+static bool isUriInput(const QString &s)
+{
+	return s.contains('@') ||
+		s.startsWith("sip:", Qt::CaseInsensitive) ||
+		s.startsWith("sips:", Qt::CaseInsensitive);
+}
 
 
 /* ---- green / red button helpers ---------------------------------- */
@@ -305,6 +426,7 @@ void CallDialog::buildUi()
 	panel->setObjectName("callPanel");
 	panel->setAutoFillBackground(true);
 	outer->addWidget(panel);
+	panel_ = panel;
 
 	auto *layout = new QVBoxLayout(panel);
 
@@ -567,17 +689,24 @@ void CallDialog::refreshHistory()
 					e.ts.toString("MM-dd hh:mm"));
 		}
 
-		auto *item = new QListWidgetItem(label);
+		auto *item = new QListWidgetItem();
+		/* Stash the target for click-to-fill — a bare number is
+		 * completed with the account domain on dialing, a full
+		 * sip: URI is dialed directly. The remaining roles feed
+		 * the row's add-contact/delete buttons. */
+		item->setData(Qt::UserRole,     target);
+		item->setData(Qt::UserRole + 1, e.ts);
+		item->setData(Qt::UserRole + 2, e.number);
+		item->setData(Qt::UserRole + 3, e.uri);
+		item->setData(Qt::UserRole + 4, e.info);
+		historyList_->addItem(item);
+
 		QIcon ic = QIcon::fromTheme(iconName);
 		if (ic.isNull() && !fallback.isEmpty())
 			ic = QIcon::fromTheme(fallback);
-		if (!ic.isNull())
-			item->setIcon(ic);
-		/* Stash the target for click-to-fill — a bare number is
-		 * completed with the account domain on dialing, a full
-		 * sip: URI is dialed directly. */
-		item->setData(Qt::UserRole, target);
-		historyList_->addItem(item);
+		QWidget *row = makeRow(label, ic, item);
+		item->setSizeHint(row->sizeHint());
+		historyList_->setItemWidget(item, row);
 	}
 }
 
@@ -627,29 +756,392 @@ void CallDialog::refreshContacts()
 		return;
 
 	historyList_->clear();
+	loadContactsFile();
 
 	/* Same format as the tray "Call Contact" menu: "Name  target",
 	 * where target is the bare number for dialable contacts or the
 	 * full sip: URI for foreign addresses. */
-	struct contacts *contacts = baresip_contacts();
-	struct le *le;
-	for (le = list_head(contact_list(contacts)); le; le = le->next) {
-		struct contact *c = static_cast<struct contact *>(le->data);
-
-		QString target = uriToTarget(contact_uri(c));
-		QString name;
-		const struct sip_addr *addr = contact_addr(c);
-		if (addr && pl_isset(&addr->dname))
-			name = QString::fromUtf8(addr->dname.p,
-						 (int)addr->dname.l)
-				.remove('"').trimmed();
-
-		QString label = name.isEmpty()
+	for (int i = 0; i < contactEntries_.size(); ++i) {
+		const ContactEntry &e = contactEntries_[i];
+		QString target = uriToTarget(e.uri.toUtf8().constData());
+		QString label = e.name.isEmpty()
 			? target
-			: QString("%1  %2").arg(name, target);
+			: QString("%1  %2").arg(e.name, target);
 
-		auto *item = new QListWidgetItem(label);
+		auto *item = new QListWidgetItem();
 		item->setData(Qt::UserRole, target);
+		item->setData(Qt::UserRole + 1, i); /* entries_ index */
 		historyList_->addItem(item);
+
+		QWidget *row = makeRow(label, QIcon(), item);
+		item->setSizeHint(row->sizeHint());
+		historyList_->setItemWidget(item, row);
 	}
+}
+
+
+/* ---- per-row action buttons + overlays ---------------------------- */
+
+/** Small flat icon button used at the right end of a list row. */
+static QToolButton *rowButton(const QString &iconName,
+			      const QString &fallbackText,
+			      const QString &tip, QWidget *parent)
+{
+	auto *b = new QToolButton(parent);
+	QIcon ic = QIcon::fromTheme(iconName);
+	if (!ic.isNull())
+		b->setIcon(ic);
+	else
+		b->setText(fallbackText);
+	b->setToolTip(tip);
+	b->setAutoRaise(true);
+	b->setFixedSize(22, 22);
+	return b;
+}
+
+
+QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
+			     QListWidgetItem *item)
+{
+	auto *row = new QWidget(historyList_);
+	auto *l = new QHBoxLayout(row);
+	l->setContentsMargins(4, 0, 2, 0);
+	l->setSpacing(4);
+
+	if (!icon.isNull()) {
+		auto *ic = new QLabel(row);
+		ic->setPixmap(icon.pixmap(16, 16));
+		ic->setAttribute(Qt::WA_TransparentForMouseEvents);
+		l->addWidget(ic);
+	}
+
+	/* The label is transparent to mouse events so clicks on the
+	 * text still reach the list item (click-to-fill and
+	 * double-click-to-dial keep working). */
+	auto *text = new QLabel(label, row);
+	text->setAttribute(Qt::WA_TransparentForMouseEvents);
+	l->addWidget(text, 1);
+
+	if (showingContacts_) {
+		QToolButton *edit = rowButton("document-edit", "\u270E",
+					    "Edit contact", row);
+		QToolButton *del  = rowButton("edit-delete", "\u2715",
+					    "Delete contact", row);
+		l->addWidget(edit);
+		l->addWidget(del);
+
+		connect(edit, &QToolButton::clicked, this, [this, item]() {
+			openContactForm(item->data(Qt::UserRole + 1)
+					.toInt());
+		});
+		connect(del, &QToolButton::clicked, this, [this, item]() {
+			int idx = item->data(Qt::UserRole + 1).toInt();
+			if (idx < 0 || idx >= contactEntries_.size())
+				return;
+			QString name = contactEntries_[idx].name;
+			confirmOverlay(
+				QString("Delete contact \"%1\"?")
+					.arg(name.isEmpty()
+						? contactEntries_[idx].uri
+						: name),
+				[this, idx]() {
+					contactEntries_.removeAt(idx);
+					saveContactsFile();
+					refreshContacts();
+				});
+		});
+	}
+	else {
+		QToolButton *add = rowButton("list-add", "+",
+					     "Add contact", row);
+		QToolButton *del = rowButton("edit-delete", "\u2715",
+					     "Delete history entry", row);
+		l->addWidget(add);
+		l->addWidget(del);
+
+		connect(add, &QToolButton::clicked, this, [this, item]() {
+			openContactForm(-1, item);
+		});
+		connect(del, &QToolButton::clicked, this, [this, item]() {
+			QDateTime ts = item->data(Qt::UserRole + 1)
+				.toDateTime();
+			QString num = item->data(Qt::UserRole + 2)
+				.toString();
+			QString uri = item->data(Qt::UserRole + 3)
+				.toString();
+			QString target = item->data(Qt::UserRole)
+				.toString();
+			confirmOverlay(
+				QString("Delete \"%1\" from history?")
+					.arg(target),
+				[this, ts, num, uri]() {
+					CallHistory::instance()
+						->remove(ts, num, uri);
+					refreshHistory();
+				});
+		});
+	}
+
+	return row;
+}
+
+
+void CallDialog::loadContactsFile()
+{
+	contactEntries_.clear();
+	preservedLines_.clear();
+
+	QFile f(contactsPath());
+	if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		while (!f.atEnd()) {
+			QString line = QString::fromUtf8(f.readLine());
+			ContactEntry e;
+			if (parseContactLine(line, e))
+				contactEntries_.append(e);
+			else
+				preservedLines_.append(line);
+		}
+		f.close();
+	}
+}
+
+
+/** Sort entries by name, write the contacts file and sync baresip's
+ *  in-memory contact list on the re thread. */
+void CallDialog::saveContactsFile()
+{
+	std::sort(contactEntries_.begin(), contactEntries_.end(),
+		  [](const ContactEntry &a, const ContactEntry &b) {
+		int c = a.name.compare(b.name, Qt::CaseInsensitive);
+		if (c != 0)
+			return c < 0;
+		return uriToNumber(a.uri.toUtf8().constData())
+			< uriToNumber(b.uri.toUtf8().constData());
+	});
+
+	QStringList lines;
+	for (const ContactEntry &e : contactEntries_)
+		lines << contactLine(e);
+
+	QFile f(contactsPath());
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate
+		   | QIODevice::Text)) {
+		QTextStream out(&f);
+		for (const QString &l : preservedLines_)
+			out << l;
+		for (const QString &l : lines)
+			out << l << "\n";
+		out.flush();
+		f.close();
+	}
+
+	/* Rebuild baresip's in-memory contact list (re thread). */
+	qt_mod_sync_contacts(lines);
+
+	emit contactsSaved();
+}
+
+
+void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
+{
+	if (formOverlay_)
+		formOverlay_->deleteLater();
+	editingContact_ = index;
+
+	formOverlay_ = new QFrame(panel_);
+	formOverlay_->setStyleSheet(
+		"QFrame { background-color: rgba(0,0,0,200);"
+		"         border-radius: 8px; }"
+		"QLabel { color: white; }");
+
+	/* Cover the panel with a small margin so the form fields
+	 * stay comfortably wide. */
+	int mw = panel_->width() / 20;
+	int mh = panel_->height() / 10;
+	formOverlay_->setGeometry(mw, mh,
+		panel_->width() - 2 * mw, panel_->height() - 2 * mh);
+
+	auto *lay = new QVBoxLayout(formOverlay_);
+	auto *form = new QFormLayout();
+	cNameEdit_ = new QLineEdit(formOverlay_);
+	cNumEdit_  = new QLineEdit(formOverlay_);
+	form->addRow("Name:",   cNameEdit_);
+	form->addRow("Number:", cNumEdit_);
+	lay->addLayout(form);
+
+	auto *btnRow = new QHBoxLayout();
+	btnRow->addStretch();
+	auto *saveBtn = new QPushButton("Save Contact", formOverlay_);
+	auto *backBtn = new QPushButton("Back", formOverlay_);
+	btnRow->addWidget(saveBtn);
+	btnRow->addWidget(backBtn);
+	lay->addLayout(btnRow);
+
+	if (index >= 0 && index < contactEntries_.size()) {
+		const ContactEntry &e = contactEntries_[index];
+		cNameEdit_->setText(e.name);
+		cNumEdit_->setText(uriToTarget(e.uri.toUtf8().constData()));
+	}
+	else if (prefill) {
+		/* Add-from-history: prefill with the entry's display
+		 * name (if any) and dial target. */
+		cNameEdit_->setText(prefill->data(Qt::UserRole + 4)
+				    .toString());
+		cNumEdit_->setText(prefill->data(Qt::UserRole).toString());
+	}
+
+	formOverlay_->show();
+	formOverlay_->raise();
+
+	connect(saveBtn, &QPushButton::clicked, this, [this]() {
+		QString name   = cNameEdit_->text().trimmed();
+		QString number = cNumEdit_->text().trimmed();
+		bool uriInput = isUriInput(number);
+		if (!uriInput && !validNumber(number)) {
+			QMessageBox::warning(this, "Invalid number",
+				"Enter a number or a sip: URI "
+				"(min. 4 digits).");
+			return;
+		}
+
+		if (editingContact_ >= 0
+		    && editingContact_ < contactEntries_.size()) {
+			ContactEntry &e = contactEntries_[editingContact_];
+			QString oldNum = uriToNumber(
+				e.uri.toUtf8().constData());
+			e.name = name;
+			if (uriInput)
+				e.uri = uriToFull(
+					number.toUtf8().constData());
+			else if (number != oldNum)
+				e.uri = completeUri(number,
+						    uriHost(e.uri));
+		}
+		else {
+			ContactEntry e;
+			e.name = name;
+			e.uri  = uriInput
+				? uriToFull(number.toUtf8().constData())
+				: completeUri(number, QString());
+			contactEntries_.append(e);
+		}
+
+		saveContactsFile();
+		refreshContacts();
+		formOverlay_->deleteLater();
+		formOverlay_ = nullptr;
+	});
+
+	connect(backBtn, &QPushButton::clicked, this, [this]() {
+		formOverlay_->deleteLater();
+		formOverlay_ = nullptr;
+	});
+}
+
+
+void CallDialog::confirmOverlay(const QString &text,
+				std::function<void()> onYes)
+{
+	if (deleteOverlay_)
+		deleteOverlay_->deleteLater();
+	pendingDelete_ = std::move(onYes);
+
+	deleteOverlay_ = new QFrame(panel_);
+	deleteOverlay_->setStyleSheet(
+		"QFrame { background-color: rgba(0,0,0,180);"
+		"         border-radius: 8px; }");
+
+	/* 20% horizontal, 30% vertical margins — same as the
+	 * settings account-removal overlay. */
+	int mw = panel_->width() / 5;
+	int mh = panel_->height() * 3 / 10;
+	deleteOverlay_->setGeometry(mw, mh,
+		panel_->width() - 2 * mw, panel_->height() - 2 * mh);
+
+	auto *olay = new QVBoxLayout(deleteOverlay_);
+	olay->setAlignment(Qt::AlignCenter);
+
+	auto *msg = new QLabel(text, deleteOverlay_);
+	msg->setStyleSheet("color: white; font-size: 14px;"
+			   " font-weight: bold;");
+	msg->setAlignment(Qt::AlignCenter);
+	msg->setWordWrap(true);
+	olay->addWidget(msg);
+
+	auto *btnRow = new QHBoxLayout();
+	btnRow->setAlignment(Qt::AlignCenter);
+	btnRow->setSpacing(20);
+
+	auto *yesBtn = new QPushButton("Yes", deleteOverlay_);
+	yesBtn->setStyleSheet(
+		"QPushButton { background-color: #d32f2f; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #b71c1c; }");
+	auto *noBtn = new QPushButton("No", deleteOverlay_);
+	noBtn->setStyleSheet(
+		"QPushButton { background-color: #424242; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #616161; }");
+	btnRow->addWidget(yesBtn);
+	btnRow->addWidget(noBtn);
+	olay->addLayout(btnRow);
+
+	deleteOverlay_->show();
+	deleteOverlay_->raise();
+
+	connect(yesBtn, &QPushButton::clicked, this, [this]() {
+		if (pendingDelete_)
+			pendingDelete_();
+		pendingDelete_ = nullptr;
+		if (deleteOverlay_)
+			deleteOverlay_->deleteLater();
+		deleteOverlay_ = nullptr;
+	});
+	connect(noBtn, &QPushButton::clicked, this, [this]() {
+		pendingDelete_ = nullptr;
+		if (deleteOverlay_)
+			deleteOverlay_->deleteLater();
+		deleteOverlay_ = nullptr;
+	});
+}
+
+
+void CallDialog::resizeEvent(QResizeEvent *ev)
+{
+	QDialog::resizeEvent(ev);
+	if (!panel_)
+		return;
+	if (formOverlay_) {
+		int mw = panel_->width() / 20;
+		int mh = panel_->height() / 10;
+		formOverlay_->setGeometry(mw, mh,
+			panel_->width() - 2 * mw,
+			panel_->height() - 2 * mh);
+	}
+	if (deleteOverlay_) {
+		int mw = panel_->width() / 5;
+		int mh = panel_->height() * 3 / 10;
+		deleteOverlay_->setGeometry(mw, mh,
+			panel_->width() - 2 * mw,
+			panel_->height() - 2 * mh);
+	}
+}
+
+
+void CallDialog::hideEvent(QHideEvent *ev)
+{
+	/* Drop any open overlays so a hidden-then-reshown panel
+	 * always comes up clean. */
+	if (formOverlay_) {
+		formOverlay_->deleteLater();
+		formOverlay_ = nullptr;
+	}
+	if (deleteOverlay_) {
+		pendingDelete_ = nullptr;
+		deleteOverlay_->deleteLater();
+		deleteOverlay_ = nullptr;
+	}
+	QDialog::hideEvent(ev);
 }

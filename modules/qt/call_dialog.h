@@ -18,12 +18,19 @@
 
 #include <QDialog>
 #include <QString>
+#include <QStringList>
+#include <QList>
+#include <functional>
 
 class QLineEdit;
 class QPushButton;
 class QListWidget;
 class QListWidgetItem;
 class QSystemTrayIcon;
+class QFrame;
+class QIcon;
+class QResizeEvent;
+class QHideEvent;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -84,6 +91,14 @@ public:
 	quintptr callPtr() const { return callPtr_; }
 	State state() const { return state_; }
 
+	/** One parsed ~/.baresip/contacts line. Public so the
+	 *  file-local parse/format helpers in the .cpp can use it. */
+	struct ContactEntry {
+		QString name;
+		QString uri;
+		QString params;
+	};
+
 signals:
 	/** Green button clicked. In Dialing: emit the URI to dial.
 	 *  In Incoming: emit the callPtr to answer. */
@@ -97,6 +112,14 @@ signals:
 	/** User opened the in-call DTMF dialpad. */
 	void dialpadRequested(quintptr callPtr, QString peerLabel);
 
+	/** Emitted after the contacts file was rewritten — the tray
+	 *  repopulates the Call Contact submenu. */
+	void contactsSaved();
+
+protected:
+	void resizeEvent(QResizeEvent *ev) override;
+	void hideEvent(QHideEvent *ev) override;
+
 private:
 	void buildUi();
 	void applyState();
@@ -105,6 +128,23 @@ private:
 	void fitWidthToHistory();
 	void refreshList();
 	void refreshContacts();
+
+	/** Row widget for a list item: a click-through label plus
+	 *  action buttons at the right end (add/edit/delete). */
+	QWidget *makeRow(const QString &label, const QIcon &icon,
+			 QListWidgetItem *item);
+
+	/** Contact add/edit overlay form. index >= 0 edits
+	 *  contactEntries_[index]; index < 0 adds a new contact,
+	 *  optionally prefilled from a history item's stored data. */
+	void openContactForm(int index, QListWidgetItem *prefill = nullptr);
+	void loadContactsFile();
+	void saveContactsFile();
+
+	/** Delete-confirmation overlay (same style as the settings
+	 *  account-removal overlay); runs `onYes` on Yes. */
+	void confirmOverlay(const QString &text,
+			    std::function<void()> onYes);
 
 	State state_;
 	quintptr callPtr_ = 0;
@@ -116,12 +156,23 @@ private:
 	bool showingContacts_ = false;
 	QPoint anchorPos_;
 
+	QFrame       *panel_         = nullptr;
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
 	QPushButton  *redBtn_     = nullptr;
 	QPushButton  *dialpadBtn_ = nullptr;
 	QPushButton  *listToggleBtn_ = nullptr;
 	QListWidget  *historyList_ = nullptr;
+
+	/* Contact add/edit overlay form + delete-confirm overlay. */
+	QFrame    *formOverlay_   = nullptr;
+	QFrame    *deleteOverlay_ = nullptr;
+	QLineEdit *cNameEdit_     = nullptr;
+	QLineEdit *cNumEdit_      = nullptr;
+	int editingContact_ = -1;
+	QList<ContactEntry> contactEntries_;
+	QStringList           preservedLines_;
+	std::function<void()> pendingDelete_;
 
 private slots:
 	void onGreen();

@@ -16,7 +16,6 @@
 class CallDialog;
 class DialpadDialog;
 class SettingsDialog;
-class ContactsDialog;
 
 class TrayApp : public QObject {
 	Q_OBJECT
@@ -56,7 +55,6 @@ private slots:
 	void onDial();
 	void onAbout();
 	void onSettings();
-	void onContacts();
 	void onQuit();
 	void onAccountToggled(QAction *action);
 	void onPresenceToggled();
@@ -100,7 +98,6 @@ private:
 	QHash<quintptr, QPointer<CallDialog>> callDialogs_;
 
 	SettingsDialog *settingsDialog_ = nullptr;
-	ContactsDialog *contactsDialog_ = nullptr;
 
 	/* Per-call submenus, keyed by call pointer. Created the moment a
 	 * call starts (incoming ring, or outgoing dial) and kept until

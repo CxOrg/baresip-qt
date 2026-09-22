@@ -5,7 +5,6 @@
 #include "call_dialog.h"
 #include "call_history.h"
 #include "settings_dialog.h"
-#include "contacts_dialog.h"
 #include "dialpad_dialog.h"
 
 #include <QMessageBox>
@@ -147,11 +146,6 @@ void TrayApp::buildMenu()
 
 	menu_->addSeparator();
 
-	/* Contacts editor */
-	QAction *contactsAct = menu_->addAction("Contacts ...");
-	connect(contactsAct, &QAction::triggered,
-		this, &TrayApp::onContacts);
-
 	QAction *settingsAct = menu_->addAction("Settings ...");
 	connect(settingsAct, &QAction::triggered, this, &TrayApp::onSettings);
 
@@ -271,21 +265,17 @@ void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 	 */
 	if (reason == QSystemTrayIcon::Trigger) {
 		/* 1. If the idle dialer is open, toggle it closed.
-		 * 2. If any other panel (settings, contacts, or an
-		 *    active call dialog) is open, close it — the next
-		 *    click can then open the dialer.
+		 * 2. If any other panel (settings or an active call
+		 *    dialog) is open, close it — the next click can
+		 *    then open the dialer.
 		 * 3. Otherwise open the dialer. */
 		if (idleCallDialog_ && idleCallDialog_->isVisible()) {
 			idleCallDialog_->hide();
 		} else if ((settingsDialog_ &&
 			   settingsDialog_->isVisible()) ||
-			  (contactsDialog_ &&
-			   contactsDialog_->isVisible()) ||
 			  !callDialogs_.isEmpty()) {
 			if (settingsDialog_ && settingsDialog_->isVisible())
 				settingsDialog_->close();
-			if (contactsDialog_ && contactsDialog_->isVisible())
-				contactsDialog_->close();
 			/* Close any active call dialogs. */
 			for (auto it = callDialogs_.begin();
 			     it != callDialogs_.end(); ) {
@@ -316,6 +306,15 @@ void TrayApp::onDial()
 		this, [this](QString uri) {
 		QByteArray u = uri.toUtf8();
 		qt_mod_connect(u.constData());
+	});
+
+	/* After a contact add/edit/delete in the dial panel, repopulate
+	 * the Call Contact submenu from the re-synced list. */
+	connect(idleCallDialog_, &CallDialog::contactsSaved,
+		this, [this]() {
+		contactsMenu_->clear();
+		populateContacts();
+		refreshTrayMenu();
 	});
 
 	idleCallDialog_->setAnchorPoint(trayClickPos_);
@@ -353,27 +352,6 @@ void TrayApp::onSettings()
 	settingsDialog_->show();
 	settingsDialog_->raise();
 	settingsDialog_->activateWindow();
-}
-
-
-void TrayApp::onContacts()
-{
-	if (!contactsDialog_) {
-		contactsDialog_ = new ContactsDialog();
-		/* After the contacts file is rewritten, repopulate the
-		 * Dial-contact submenu from the re-synced list. */
-		connect(contactsDialog_, &ContactsDialog::contactsSaved,
-			this, [this]() {
-			contactsMenu_->clear();
-			populateContacts();
-			refreshTrayMenu();
-		});
-	}
-
-	contactsDialog_->setAnchorPoint(trayClickPos_);
-	contactsDialog_->show();
-	contactsDialog_->raise();
-	contactsDialog_->activateWindow();
 }
 
 
