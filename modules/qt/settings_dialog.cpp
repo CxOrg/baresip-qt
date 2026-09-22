@@ -644,7 +644,7 @@ void SettingsDialog::buildUi()
 	addTabBtn_->setIcon(QIcon(plusSvg));
 	addTabBtn_->setIconSize(QSize(24, 24));
 	addTabBtn_->setFixedSize(30, 30);
-	addTabBtn_->setToolTip("Add account");
+	addTabBtn_->setToolTip("Add account then save");
 	addTabBtn_->setAutoRaise(true);
 	cornerLay->addWidget(addTabBtn_);
 
@@ -652,7 +652,7 @@ void SettingsDialog::buildUi()
 	removeTabBtn_->setIcon(QIcon(minusSvg));
 	removeTabBtn_->setIconSize(QSize(24, 24));
 	removeTabBtn_->setFixedSize(30, 30);
-	removeTabBtn_->setToolTip("Remove this account");
+	removeTabBtn_->setToolTip("Remove account and confirm");
 	removeTabBtn_->setAutoRaise(true);
 	cornerLay->addWidget(removeTabBtn_);
 
