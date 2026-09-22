@@ -473,9 +473,11 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 		"  background-color: palette(window);"
 		"  border: 2px solid palette(dark);"
 		"  border-radius: 8px; }"
-		/* Input fields in the account tabs: 3px taller than default. */
+		/* Input fields: zero padding (overrides Qt6Curve theme
+		 * padding that pushes text off-center) and a small
+		 * min-height for a slightly taller field. */
 		"QLineEdit, QSpinBox, QComboBox {"
-		"  min-height: 0.9em; }");
+		"  padding: 0px; min-height: 0.9em; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
