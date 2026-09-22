@@ -490,8 +490,8 @@ void SettingsDialog::resizeEvent(QResizeEvent *ev)
 {
 	QDialog::resizeEvent(ev);
 	if (confirmOverlay_ && panel_) {
-		int mw = panel_->width() / 10;
-		int mh = panel_->height() / 5;
+		int mw = panel_->width() / 5;
+		int mh = panel_->height() * 3 / 10;
 		confirmOverlay_->setGeometry(mw, mh,
 			panel_->width() - 2 * mw,
 			panel_->height() - 2 * mh);
@@ -1022,10 +1022,10 @@ void SettingsDialog::onRemoveAccount()
 	confirmOverlay_->setAttribute(Qt::WA_TransparentForMouseEvents,
 				      false);
 
-	/* 10% horizontal, 20% vertical margins so the overlay
+	/* 20% horizontal, 30% vertical margins so the overlay
 	 * doesn't cover the full panel. */
-	int mw = panel_->width() / 10;
-	int mh = panel_->height() / 5;
+	int mw = panel_->width() / 5;
+	int mh = panel_->height() * 3 / 10;
 	confirmOverlay_->setGeometry(mw, mh,
 		panel_->width() - 2 * mw,
 		panel_->height() - 2 * mh);
