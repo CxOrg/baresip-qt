@@ -992,7 +992,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 	auto *btnRow = new QHBoxLayout();
 	btnRow->addStretch();
 	auto *saveBtn = new QPushButton("Save Contact", formOverlay_);
-	auto *backBtn = new QPushButton("Back", formOverlay_);
+	auto *backBtn = new QPushButton("Close", formOverlay_);
 	btnRow->addWidget(saveBtn);
 	btnRow->addWidget(backBtn);
 	lay->addLayout(btnRow);
@@ -1075,7 +1075,8 @@ void CallDialog::confirmOverlay(const QString &text,
 		deleteOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,200);"
 			"         border: 2px solid #808080;"
-			"         border-radius: 8px; }")
+			"         border-radius: 8px; }"
+			"QLabel { border: none; color: palette(text); }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
 
@@ -1087,11 +1088,14 @@ void CallDialog::confirmOverlay(const QString &text,
 		panel_->width() - 2 * mw, panel_->height() - 2 * mh);
 
 	auto *olay = new QVBoxLayout(deleteOverlay_);
-	olay->setAlignment(Qt::AlignCenter);
+	/* Stretches centre the content vertically; items fill
+	 * the overlay width so the message text centres across
+	 * the full width. */
+	olay->addStretch();
 
 	auto *msg = new QLabel(text, deleteOverlay_);
-	msg->setStyleSheet("color: palette(text); font-size: 14px;"
-			   " font-weight: bold;");
+	msg->setStyleSheet("border: none; color: palette(text);"
+			   " font-size: 14px; font-weight: bold;");
 	msg->setAlignment(Qt::AlignCenter);
 	msg->setWordWrap(true);
 	olay->addWidget(msg);
@@ -1115,6 +1119,7 @@ void CallDialog::confirmOverlay(const QString &text,
 	btnRow->addWidget(yesBtn);
 	btnRow->addWidget(noBtn);
 	olay->addLayout(btnRow);
+	olay->addStretch();
 
 	deleteOverlay_->show();
 	deleteOverlay_->raise();
