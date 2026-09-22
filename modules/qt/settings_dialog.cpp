@@ -1047,7 +1047,8 @@ void SettingsDialog::onRemoveAccount()
 			"record from the accounts file.")
 			.arg(idx + 1), confirmOverlay_);
 	msg->setStyleSheet("border: none; color: palette(text);"
-			   " font-size: 14px; font-weight: bold;");
+			   " font-size: 14px; font-weight: bold;"
+			   " padding-bottom: 1.0em;");
 	msg->setAlignment(Qt::AlignCenter);
 	msg->setWordWrap(true);
 	olay->addWidget(msg);
