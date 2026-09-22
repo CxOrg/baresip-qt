@@ -489,8 +489,13 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 void SettingsDialog::resizeEvent(QResizeEvent *ev)
 {
 	QDialog::resizeEvent(ev);
-	if (confirmOverlay_ && panel_)
-		confirmOverlay_->resize(panel_->size());
+	if (confirmOverlay_ && panel_) {
+		int mw = panel_->width() / 10;
+		int mh = panel_->height() / 5;
+		confirmOverlay_->setGeometry(mw, mh,
+			panel_->width() - 2 * mw,
+			panel_->height() - 2 * mh);
+	}
 }
 
 
@@ -1017,13 +1022,20 @@ void SettingsDialog::onRemoveAccount()
 	confirmOverlay_->setAttribute(Qt::WA_TransparentForMouseEvents,
 				      false);
 
+	/* 10% horizontal, 20% vertical margins so the overlay
+	 * doesn't cover the full panel. */
+	int mw = panel_->width() / 10;
+	int mh = panel_->height() / 5;
+	confirmOverlay_->setGeometry(mw, mh,
+		panel_->width() - 2 * mw,
+		panel_->height() - 2 * mh);
+
 	auto *olay = new QVBoxLayout(confirmOverlay_);
 	olay->setAlignment(Qt::AlignCenter);
 
 	auto *msg = new QLabel(
-		QString("Remove account %1?\n"
-			"This deletes the account record "
-			"from the accounts file.")
+		QString("Remove account %1? This deletes the account "
+			"record from the accounts file.")
 			.arg(idx + 1), confirmOverlay_);
 	msg->setStyleSheet("color: white; font-size: 14px;"
 			   " font-weight: bold;");
@@ -1053,7 +1065,6 @@ void SettingsDialog::onRemoveAccount()
 	olay->addLayout(btnRow);
 
 	/* Size the overlay to cover the panel. */
-	confirmOverlay_->resize(panel_->size());
 	confirmOverlay_->show();
 	confirmOverlay_->raise();
 
