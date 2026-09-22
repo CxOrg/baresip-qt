@@ -13,7 +13,6 @@
 #include <QFrame>
 #include <QPushButton>
 #include <QToolButton>
-#include <QIcon>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -620,40 +619,27 @@ void SettingsDialog::buildUi()
 	cornerLay->setContentsMargins(0, 0, 0, 0);
 	cornerLay->setSpacing(4);
 
-	/* Circled +/- icons drawn as SVG so they scale crisply and
-	 * carry a visible circle outline (50% larger than the old
-	 * text buttons: 30x30 vs 20x20). */
-	static const char *plusSvg =
-		"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
-		"  <circle cx='12' cy='12' r='10' fill='none' stroke='currentColor'"
-		"          stroke-width='2'/>"
-		"  <line x1='7' y1='12' x2='17' y2='12' stroke='currentColor'"
-		"        stroke-width='2.5' stroke-linecap='round'/>"
-		"  <line x1='12' y1='7' x2='12' y2='17' stroke='currentColor'"
-		"        stroke-width='2.5' stroke-linecap='round'/>"
-		"</svg>";
-	static const char *minusSvg =
-		"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
-		"  <circle cx='12' cy='12' r='10' fill='none' stroke='currentColor'"
-		"          stroke-width='2'/>"
-		"  <line x1='7' y1='12' x2='17' y2='12' stroke='currentColor'"
-		"        stroke-width='2.5' stroke-linecap='round'/>"
-		"</svg>";
-
+	/* Circled +/- glyphs: U+2295 (CIRCLED PLUS) and U+2296
+	 * (CIRCLED MINUS). 50% larger than the old text buttons:
+	 * 30x30 vs 20x20. */
 	addTabBtn_ = new QToolButton(corner);
-	addTabBtn_->setIcon(QIcon(plusSvg));
-	addTabBtn_->setIconSize(QSize(24, 24));
+	addTabBtn_->setText(QString::fromUtf8("\xe2\x8a\x95"));
 	addTabBtn_->setFixedSize(30, 30);
 	addTabBtn_->setToolTip("Add account then save");
 	addTabBtn_->setAutoRaise(true);
+	addTabBtn_->setStyleSheet(
+		"QToolButton { border: none; font-size: 22px; padding: 0; }"
+		"QToolButton:hover { color: palette(highlight); }");
 	cornerLay->addWidget(addTabBtn_);
 
 	removeTabBtn_ = new QToolButton(corner);
-	removeTabBtn_->setIcon(QIcon(minusSvg));
-	removeTabBtn_->setIconSize(QSize(24, 24));
+	removeTabBtn_->setText(QString::fromUtf8("\xe2\x8a\x96"));
 	removeTabBtn_->setFixedSize(30, 30);
 	removeTabBtn_->setToolTip("Remove account and confirm");
 	removeTabBtn_->setAutoRaise(true);
+	removeTabBtn_->setStyleSheet(
+		"QToolButton { border: none; font-size: 22px; padding: 0; }"
+		"QToolButton:hover { color: palette(highlight); }");
 	cornerLay->addWidget(removeTabBtn_);
 
 	tabs->setCornerWidget(corner, Qt::TopRightCorner);
