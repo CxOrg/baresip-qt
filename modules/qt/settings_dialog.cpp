@@ -875,7 +875,8 @@ void SettingsDialog::saveAccount(AccountWidgets &w, int index)
 
 void SettingsDialog::saveSettings()
 {
-	for (int i = 0; i < kMaxAccounts; ++i)
+	int nAccounts = tabs_->count() - 1; /* exclude Audio tab */
+	for (int i = 0; i < nAccounts; ++i)
 		saveAccount(accounts_[i], i);
 
 	/* Audio device selection is not persisted yet — baresip writes
