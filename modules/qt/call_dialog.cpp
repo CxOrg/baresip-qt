@@ -362,7 +362,10 @@ void CallDialog::buildUi()
 		this, &CallDialog::onRed);
 
 	/* Same width as the settings/contacts panels; fitWidthToHistory
-	 * still expands it if a list entry needs more room. */
+	 * still expands it if a list entry needs more room. The
+	 * minimum keeps adjustSize() from collapsing the dialog in
+	 * InCall/Incoming state where the history list is hidden. */
+	setMinimumWidth(470);
 	resize(470, 320);
 }
 
