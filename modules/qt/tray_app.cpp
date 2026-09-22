@@ -270,10 +270,30 @@ void TrayApp::onTrayActivated(QSystemTrayIcon::ActivationReason reason)
 	 * action) -- give it a useful default instead of nothing.
 	 */
 	if (reason == QSystemTrayIcon::Trigger) {
-		/* Toggle: if the idle dialog is visible, hide it;
-		 * otherwise show it. */
+		/* 1. If the idle dialer is open, toggle it closed.
+		 * 2. If any other panel (settings, contacts, or an
+		 *    active call dialog) is open, close it — the next
+		 *    click can then open the dialer.
+		 * 3. Otherwise open the dialer. */
 		if (idleCallDialog_ && idleCallDialog_->isVisible()) {
 			idleCallDialog_->hide();
+		} else if ((settingsDialog_ &&
+			   settingsDialog_->isVisible()) ||
+			  (contactsDialog_ &&
+			   contactsDialog_->isVisible()) ||
+			  !callDialogs_.isEmpty()) {
+			if (settingsDialog_ && settingsDialog_->isVisible())
+				settingsDialog_->close();
+			if (contactsDialog_ && contactsDialog_->isVisible())
+				contactsDialog_->close();
+			/* Close any active call dialogs. */
+			for (auto it = callDialogs_.begin();
+			     it != callDialogs_.end(); ) {
+				QPointer<CallDialog> dlg = it.value();
+				if (dlg && dlg != idleCallDialog_)
+					dlg->close();
+				it = callDialogs_.erase(it);
+			}
 		} else {
 			onDial();
 		}
