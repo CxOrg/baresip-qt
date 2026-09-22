@@ -205,7 +205,7 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * the border does not inherit to child widgets. */
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid #808080;"
+		"         border: 1px solid #808080;"
 		"         border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -229,7 +229,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid #808080;"
+		"         border: 1px solid #808080;"
 		"         border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
@@ -965,7 +965,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 		QColor bg = palette().color(QPalette::Window);
 		formOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,215);"
-			"         border: 2px solid #808080;"
+			"         border: 1px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { border: none; color: palette(text); }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
@@ -1081,7 +1081,7 @@ void CallDialog::confirmOverlay(const QString &text,
 		QColor bg = palette().color(QPalette::Window);
 		deleteOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,200);"
-			"         border: 2px solid #808080;"
+			"         border: 1px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { border: none; color: palette(text); }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
