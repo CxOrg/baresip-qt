@@ -953,30 +953,32 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 		/* Same dialog style as the parent panel — themed
 		 * palette(window) fill at ~84% opacity so it still
 		 * reads as an overlay, mid-grey border, and
-		 * palette(text) labels (works on light and dark
-		 * themes). */
+		 * borderless palette(text) labels (works on light
+		 * and dark themes). */
 		QColor bg = palette().color(QPalette::Window);
 		formOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,215);"
 			"         border: 2px solid #808080;"
 			"         border-radius: 8px; }"
-			"QLabel { color: palette(text); }")
+			"QLabel { border: none; color: palette(text); }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
 
-	/* Cover the panel with a small margin — extra room at the
-	 * top for the title. */
+	/* Cover the panel with a small margin — 15% top, 10%
+	 * bottom, 5% sides. */
 	int mw = panel_->width() / 20;
-	int mt = panel_->height() / 5;
+	int mt = panel_->height() * 15 / 100;
 	int mb = panel_->height() / 10;
 	formOverlay_->setGeometry(mw, mt,
 		panel_->width() - 2 * mw, panel_->height() - mt - mb);
 
 	auto *lay = new QVBoxLayout(formOverlay_);
+	lay->setSpacing(4); /* ~50% tighter than the default gap */
 
 	auto *title = new QLabel(editingContact_ >= 0
 		? "Edit Contact" : "Add Contact", formOverlay_);
-	title->setStyleSheet("font-weight: bold; font-size: 15px;");
+	title->setStyleSheet("font-weight: bold; font-size: 15px;"
+			     " border: none;");
 	title->setAlignment(Qt::AlignCenter);
 	lay->addWidget(title);
 
@@ -1141,7 +1143,7 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 		return;
 	if (formOverlay_) {
 		int mw = panel_->width() / 20;
-		int mt = panel_->height() / 5;
+		int mt = panel_->height() * 15 / 100;
 		int mb = panel_->height() / 10;
 		formOverlay_->setGeometry(mw, mt,
 			panel_->width() - 2 * mw,
