@@ -199,10 +199,12 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 		       Qt::WindowStaysOnTopHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	/* The dialog itself is transparent — the inner #callPanel
-	 * layer carries the themed background, border and radius. */
+	 * layer carries the themed background, mid-grey border and
+	 * radius. The #callPanel ID selector scopes the rule so
+	 * the border does not inherit to child widgets. */
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid palette(dark);"
+		"         border: 2px solid #808080;"
 		"         border-radius: 8px; }");
 	setAttribute(Qt::WA_ShowWithoutActivating, false);
 	installEventFilter(this);
@@ -226,7 +228,7 @@ CallDialog::CallDialog(State state, quintptr callPtr,
 	setAttribute(Qt::WA_TranslucentBackground);
 	setStyleSheet(
 		"QFrame#callPanel { background-color: palette(window);"
-		"         border: 2px solid palette(dark);"
+		"         border: 2px solid #808080;"
 		"         border-radius: 8px; }");
 	installEventFilter(this);
 	buildUi();
