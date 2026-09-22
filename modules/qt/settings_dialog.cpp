@@ -620,30 +620,36 @@ void SettingsDialog::buildUi()
 	cornerLay->setSpacing(4);
 
 	/* Simple +/- symbols in button-like areas with a mid-grey
-	 * border. Symbol size 150% of the original (24px vs 16px),
-	 * button size 30x30 vs 20x20. */
+	 * border. Font forced to regular (non-italic), button size
+	 * reduced 20% to 24x24, 3px bottom margin. */
 	addTabBtn_ = new QToolButton(corner);
 	addTabBtn_->setText("+");
-	addTabBtn_->setFixedSize(30, 30);
+	addTabBtn_->setFixedSize(24, 24);
 	addTabBtn_->setToolTip("Add account then save");
 	addTabBtn_->setAutoRaise(false);
 	addTabBtn_->setStyleSheet(
 		"QToolButton { border: 1px solid #808080; border-radius: 4px;"
-		"              font-size: 24px; font-weight: bold; padding: 0; }"
+		"              font-size: 19px; font-weight: bold;"
+		"              font-style: normal; padding: 0;"
+		"              margin-bottom: 3px; }"
 		"QToolButton:hover { border: 1px solid #808080;"
-		"                    background: #c0c0c0; }");
+		"                    background: #c0c0c0;"
+		"                    margin-bottom: 3px; }");
 	cornerLay->addWidget(addTabBtn_);
 
 	removeTabBtn_ = new QToolButton(corner);
 	removeTabBtn_->setText(QString::fromUtf8("\xe2\x88\x92"));
-	removeTabBtn_->setFixedSize(30, 30);
+	removeTabBtn_->setFixedSize(24, 24);
 	removeTabBtn_->setToolTip("Remove account and confirm");
 	removeTabBtn_->setAutoRaise(false);
 	removeTabBtn_->setStyleSheet(
 		"QToolButton { border: 1px solid #808080; border-radius: 4px;"
-		"              font-size: 24px; font-weight: bold; padding: 0; }"
+		"              font-size: 19px; font-weight: bold;"
+		"              font-style: normal; padding: 0;"
+		"              margin-bottom: 3px; }"
 		"QToolButton:hover { border: 1px solid #808080;"
-		"                    background: #c0c0c0; }");
+		"                    background: #c0c0c0;"
+		"                    margin-bottom: 3px; }");
 	cornerLay->addWidget(removeTabBtn_);
 
 	tabs->setCornerWidget(corner, Qt::TopRightCorner);
