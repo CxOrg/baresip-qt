@@ -477,7 +477,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 		 * padding that pushes text off-center) and a small
 		 * min-height for a slightly taller field. */
 		"QLineEdit, QSpinBox, QComboBox {"
-		"  padding: 0px; min-height: 1.0em; }");
+		"  padding: 0px 0px 1px 0px; min-height: 1.0em; }");
 	buildUi();
 	loadSettings();
 	resize(470, 480);
