@@ -29,6 +29,7 @@ class QLineEdit;
 class QComboBox;
 class QSpinBox;
 class QCheckBox;
+class QFrame;
 class QTabWidget;
 class QToolButton;
 class QPushButton;
@@ -44,12 +45,13 @@ public:
 	 *  before show(). */
 	void setAnchorPoint(const QPoint &pos);
 
+protected:
+	void resizeEvent(QResizeEvent *ev) override;
+
 private:
 	/** Maximum number of account tabs (the + button hides at this
 	 *  count). */
-	static constexpr int kMaxAccounts = 4;
-
-	/** All input widgets of one account tab. */
+	static constexpr int kMaxAccounts = 4;	/** All input widgets of one account tab. */
 	struct AccountWidgets {
 		QCheckBox *enabled     = nullptr;
 		QLineEdit *displayName = nullptr;
@@ -85,9 +87,11 @@ private:
 
 	AccountWidgets accounts_[kMaxAccounts];
 
+	QFrame    *panel_         = nullptr;
 	QTabWidget *tabs_          = nullptr;
 	QToolButton *addTabBtn_    = nullptr;
 	QToolButton *removeTabBtn_ = nullptr;
+	QFrame    *confirmOverlay_ = nullptr;
 
 	/* Audio tab */
 	QComboBox *audioSrc_     = nullptr;

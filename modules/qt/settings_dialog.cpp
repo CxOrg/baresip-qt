@@ -23,6 +23,7 @@
 #include <QDir>
 #include <QStandardPaths>
 #include <QWindow>
+#include <QResizeEvent>
 #include <functional>
 
 #ifdef HAVE_LAYERSHELL
@@ -485,6 +486,14 @@ SettingsDialog::SettingsDialog(QWidget *parent)
 }
 
 
+void SettingsDialog::resizeEvent(QResizeEvent *ev)
+{
+	QDialog::resizeEvent(ev);
+	if (confirmOverlay_ && panel_)
+		confirmOverlay_->resize(panel_->size());
+}
+
+
 void SettingsDialog::setupLayerShell()
 {
 #ifdef HAVE_LAYERSHELL
@@ -603,6 +612,7 @@ void SettingsDialog::buildUi()
 	panel->setObjectName("settingsPanel");
 	panel->setAutoFillBackground(true);
 	outer->addWidget(panel);
+	panel_ = panel;
 
 	auto *layout = new QVBoxLayout(panel);
 	auto *tabs = new QTabWidget(panel);
@@ -994,39 +1004,99 @@ void SettingsDialog::onRemoveAccount()
 	if (idx < 1 || idx >= nAccounts)
 		return;
 
-	auto ret = QMessageBox::question(
-		this, "Remove account",
-		QString("Remove account %1? This deletes the account "
-			"record from the accounts file.")
-			.arg(idx + 1),
-		QMessageBox::Yes | QMessageBox::No);
-	if (ret != QMessageBox::Yes)
-		return;
+	/* Build an overlay confirmation on the settings panel
+	 * instead of a separate modal dialog. The overlay is a
+	 * semi-transparent QFrame centered over the panel. */
+	if (confirmOverlay_)
+		confirmOverlay_->deleteLater();
 
-	/* Destroy the live UA for this account (if any). */
-	struct ua *ua = findUaByUserHost(accounts_[idx].origLine);
-	if (ua)
-		qt_mod_ua_free(ua);
+	confirmOverlay_ = new QFrame(panel_);
+	confirmOverlay_->setStyleSheet(
+		"QFrame { background-color: rgba(0,0,0,180);"
+		"         border-radius: 8px; }");
+	confirmOverlay_->setAttribute(Qt::WA_TransparentForMouseEvents,
+				      false);
 
-	/* Remove the line from ~/.baresip/accounts. */
-	removeAccountLine(idx);
+	auto *olay = new QVBoxLayout(confirmOverlay_);
+	olay->setAlignment(Qt::AlignCenter);
 
-	/* Remove the tab. */
-	tabs_->removeTab(idx);
+	auto *msg = new QLabel(
+		QString("Remove account %1?\n"
+			"This deletes the account record "
+			"from the accounts file.")
+			.arg(idx + 1), confirmOverlay_);
+	msg->setStyleSheet("color: white; font-size: 14px;"
+			   " font-weight: bold;");
+	msg->setAlignment(Qt::AlignCenter);
+	msg->setWordWrap(true);
+	olay->addWidget(msg);
 
-	/* Shift the AccountWidgets entries down so slot i holds the
-	 * data for the (now renumbered) tab i. The page widgets move
-	 * with the tab; only the AccountWidgets records (which are
-	 * indexed by slot, not by tab) need reindexing. */
-	for (int i = idx; i < nAccounts - 1; ++i)
-		accounts_[i] = accounts_[i + 1];
+	auto *btnRow = new QHBoxLayout();
+	btnRow->setAlignment(Qt::AlignCenter);
+	btnRow->setSpacing(20);
 
-	/* Clear the now-vacant top slot. */
-	accounts_[nAccounts - 1] = AccountWidgets{};
+	auto *yesBtn = new QPushButton("Yes", confirmOverlay_);
+	yesBtn->setStyleSheet(
+		"QPushButton { background-color: #d32f2f; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #b71c1c; }");
+	auto *noBtn = new QPushButton("No", confirmOverlay_);
+	noBtn->setStyleSheet(
+		"QPushButton { background-color: #424242; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #616161; }");
 
-	/* Renumber the remaining account tabs. */
-	for (int i = 0; i < nAccounts - 1; ++i)
-		tabs_->setTabText(i, QString("Account %1").arg(i + 1));
+	btnRow->addWidget(yesBtn);
+	btnRow->addWidget(noBtn);
+	olay->addLayout(btnRow);
 
-	updateAddTabVisibility();
+	/* Size the overlay to cover the panel. */
+	confirmOverlay_->resize(panel_->size());
+	confirmOverlay_->show();
+	confirmOverlay_->raise();
+
+	/* Yes — proceed with removal. */
+	connect(yesBtn, &QPushButton::clicked, this, [this, idx]() {
+		if (confirmOverlay_)
+			confirmOverlay_->deleteLater();
+		confirmOverlay_ = nullptr;
+
+		int n = tabs_->count() - 1; /* exclude Audio tab */
+
+		/* Destroy the live UA for this account (if any). */
+		struct ua *ua = findUaByUserHost(
+			accounts_[idx].origLine);
+		if (ua)
+			qt_mod_ua_free(ua);
+
+		/* Remove the line from ~/.baresip/accounts. */
+		removeAccountLine(idx);
+
+		/* Remove the tab. */
+		tabs_->removeTab(idx);
+
+		/* Shift the AccountWidgets entries down so slot i
+		 * holds the data for the (now renumbered) tab i. */
+		for (int i = idx; i < n - 1; ++i)
+			accounts_[i] = accounts_[i + 1];
+
+		/* Clear the now-vacant top slot. */
+		accounts_[n - 1] = AccountWidgets{};
+
+		/* Renumber the remaining account tabs. */
+		for (int i = 0; i < n - 1; ++i)
+			tabs_->setTabText(i,
+				QString("Account %1").arg(i + 1));
+
+		updateAddTabVisibility();
+	});
+
+	/* No — cancel. */
+	connect(noBtn, &QPushButton::clicked, this, [this]() {
+		if (confirmOverlay_)
+			confirmOverlay_->deleteLater();
+		confirmOverlay_ = nullptr;
+	});
 }
