@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QToolButton>
 #include <QLabel>
+#include <QTabBar>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -432,32 +433,24 @@ void CallDialog::buildUi()
 
 	auto *layout = new QVBoxLayout(panel);
 
-	/* Top row: label + toggle switching the list between the
+	/* Top row: label + tab strip switching the list between the
 	 * call history and the contacts list. */
 	auto *topRow = new QHBoxLayout();
 	auto *label = new QLabel(panel);
 	label->setText("Enter SIP URI or number:");
 	topRow->addWidget(label);
 	topRow->addStretch();
-	listToggleBtn_ = new QPushButton(panel);
-	{
-		/* QPushButton can't render rich text — embed a
-		 * click-through QLabel carrying the text so the
-		 * active view's word can be bolded. */
-		auto *bl = new QHBoxLayout(listToggleBtn_);
-		bl->setContentsMargins(8, 0, 8, 0);
-		listToggleLabel_ = new QLabel(listToggleBtn_);
-		listToggleLabel_->setTextFormat(Qt::RichText);
-		listToggleLabel_->setAlignment(Qt::AlignCenter);
-		listToggleLabel_->setAttribute(
-			Qt::WA_TransparentForMouseEvents);
-		bl->addWidget(listToggleLabel_);
-		updateToggleText();
-	}
-	topRow->addWidget(listToggleBtn_);
+	listTabs_ = new QTabBar(panel);
+	listTabs_->addTab("History");
+	listTabs_->addTab("Contact");
+	listTabs_->setExpanding(false);
+	topRow->addWidget(listTabs_);
 	layout->addLayout(topRow);
-	connect(listToggleBtn_, &QPushButton::clicked,
-		this, &CallDialog::onToggleList);
+	connect(listTabs_, &QTabBar::currentChanged,
+		this, [this](int idx) {
+		showingContacts_ = (idx == 1);
+		refreshList();
+	});
 
 	uriEdit_ = new QLineEdit(panel);
 	uriEdit_->setAlignment(Qt::AlignLeft);
@@ -750,16 +743,8 @@ void CallDialog::onHistoryDoubleClicked(QListWidgetItem *item)
 }
 
 
-void CallDialog::onToggleList()
-{
-	showingContacts_ = !showingContacts_;
-	refreshList();
-}
-
-
 void CallDialog::refreshList()
 {
-	updateToggleText();
 	if (showingContacts_)
 		refreshContacts();
 	else
@@ -767,19 +752,11 @@ void CallDialog::refreshList()
 }
 
 
-void CallDialog::updateToggleText()
-{
-	if (!listToggleLabel_)
-		return;
-	listToggleLabel_->setText(showingContacts_
-		? QStringLiteral("History/<b>Contact</b>")
-		: QStringLiteral("<b>History</b>/Contact"));
-}
-
-
 void CallDialog::showContacts(bool contacts)
 {
 	showingContacts_ = contacts;
+	if (listTabs_)
+		listTabs_->setCurrentIndex(contacts ? 1 : 0);
 	refreshList();
 }
 

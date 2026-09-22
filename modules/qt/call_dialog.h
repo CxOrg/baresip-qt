@@ -29,9 +29,9 @@ class QListWidgetItem;
 class QSystemTrayIcon;
 class QFrame;
 class QIcon;
-class QLabel;
 class QResizeEvent;
 class QHideEvent;
+class QTabBar;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -134,8 +134,6 @@ private:
 	void fitWidthToHistory();
 	void refreshList();
 	void refreshContacts();
-	/** Bold the active word on the "History/Contact" toggle. */
-	void updateToggleText();
 
 	/** Row widget for a list item: a click-through label plus
 	 *  action buttons at the right end (add/edit/delete). */
@@ -170,7 +168,7 @@ private:
 	QPushButton  *redBtn_     = nullptr;
 	QPushButton  *dialpadBtn_ = nullptr;
 	QPushButton  *listToggleBtn_ = nullptr;
-	QLabel       *listToggleLabel_ = nullptr;
+	QTabBar      *listTabs_     = nullptr;
 	QListWidget  *historyList_ = nullptr;
 
 	/* Contact add/edit overlay form + delete-confirm overlay. */
@@ -187,7 +185,6 @@ private slots:
 	void onGreen();
 	void onRed();
 	void onDialpad();
-	void onToggleList();
 	void onHistoryClicked(QListWidgetItem *item);
 	void onHistoryDoubleClicked(QListWidgetItem *item);
 };
