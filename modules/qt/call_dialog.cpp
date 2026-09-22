@@ -964,7 +964,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 		 * and dark themes). */
 		QColor bg = palette().color(QPalette::Window);
 		formOverlay_->setStyleSheet(QString(
-			"QFrame { background-color: rgba(%1,%2,%3,215);"
+			"QFrame { background-color: rgba(%1,%2,%3,230);"
 			"         border: 1px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { border: none; color: palette(text); }")
@@ -1080,7 +1080,7 @@ void CallDialog::confirmOverlay(const QString &text,
 		 * the active color scheme. */
 		QColor bg = palette().color(QPalette::Window);
 		deleteOverlay_->setStyleSheet(QString(
-			"QFrame { background-color: rgba(%1,%2,%3,200);"
+			"QFrame { background-color: rgba(%1,%2,%3,230);"
 			"         border: 1px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { border: none; color: palette(text); }")

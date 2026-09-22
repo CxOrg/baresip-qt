@@ -1022,7 +1022,7 @@ void SettingsDialog::onRemoveAccount()
 		 * reads as an overlay, mid-grey border. */
 		QColor bg = palette().color(QPalette::Window);
 		confirmOverlay_->setStyleSheet(QString(
-			"QFrame { background-color: rgba(%1,%2,%3,200);"
+			"QFrame { background-color: rgba(%1,%2,%3,230);"
 			"         border: 1px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { border: none; color: palette(text); }")
