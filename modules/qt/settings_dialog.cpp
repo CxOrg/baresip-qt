@@ -1016,9 +1016,17 @@ void SettingsDialog::onRemoveAccount()
 		confirmOverlay_->deleteLater();
 
 	confirmOverlay_ = new QFrame(panel_);
-	confirmOverlay_->setStyleSheet(
-		"QFrame { background-color: rgba(0,0,0,180);"
-		"         border-radius: 8px; }");
+	{
+		/* Same dialog style as the parent panel — themed
+		 * palette(window) fill at ~78% opacity so it still
+		 * reads as an overlay, palette(dark) border. */
+		QColor bg = palette().color(QPalette::Window);
+		confirmOverlay_->setStyleSheet(QString(
+			"QFrame { background-color: rgba(%1,%2,%3,200);"
+			"         border: 2px solid palette(dark);"
+			"         border-radius: 8px; }")
+			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
+	}
 	confirmOverlay_->setAttribute(Qt::WA_TransparentForMouseEvents,
 				      false);
 
@@ -1037,7 +1045,7 @@ void SettingsDialog::onRemoveAccount()
 		QString("Remove account %1? This deletes the account "
 			"record from the accounts file.")
 			.arg(idx + 1), confirmOverlay_);
-	msg->setStyleSheet("color: white; font-size: 14px;"
+	msg->setStyleSheet("color: palette(text); font-size: 14px;"
 			   " font-weight: bold;");
 	msg->setAlignment(Qt::AlignCenter);
 	msg->setWordWrap(true);

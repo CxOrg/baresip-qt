@@ -949,10 +949,20 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 	editingContact_ = index;
 
 	formOverlay_ = new QFrame(panel_);
-	formOverlay_->setStyleSheet(
-		"QFrame { background-color: rgba(0,0,0,200);"
-		"         border-radius: 8px; }"
-		"QLabel { color: white; }");
+	{
+		/* Same dialog style as the parent panel — themed
+		 * palette(window) fill at ~84% opacity so it still
+		 * reads as an overlay, palette(dark) border, and
+		 * palette(text) labels (works on light and dark
+		 * themes). */
+		QColor bg = palette().color(QPalette::Window);
+		formOverlay_->setStyleSheet(QString(
+			"QFrame { background-color: rgba(%1,%2,%3,215);"
+			"         border: 2px solid palette(dark);"
+			"         border-radius: 8px; }"
+			"QLabel { color: palette(text); }")
+			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
+	}
 
 	/* Cover the panel with a small margin so the form fields
 	 * stay comfortably wide. */
@@ -1047,9 +1057,17 @@ void CallDialog::confirmOverlay(const QString &text,
 	pendingDelete_ = std::move(onYes);
 
 	deleteOverlay_ = new QFrame(panel_);
-	deleteOverlay_->setStyleSheet(
-		"QFrame { background-color: rgba(0,0,0,180);"
-		"         border-radius: 8px; }");
+	{
+		/* Themed like the parent panel (palette(window) at
+		 * ~78% opacity, palette(dark) border) so it matches
+		 * the active color scheme. */
+		QColor bg = palette().color(QPalette::Window);
+		deleteOverlay_->setStyleSheet(QString(
+			"QFrame { background-color: rgba(%1,%2,%3,200);"
+			"         border: 2px solid palette(dark);"
+			"         border-radius: 8px; }")
+			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
+	}
 
 	/* 20% horizontal, 30% vertical margins — same as the
 	 * settings account-removal overlay. */
@@ -1062,7 +1080,7 @@ void CallDialog::confirmOverlay(const QString &text,
 	olay->setAlignment(Qt::AlignCenter);
 
 	auto *msg = new QLabel(text, deleteOverlay_);
-	msg->setStyleSheet("color: white; font-size: 14px;"
+	msg->setStyleSheet("color: palette(text); font-size: 14px;"
 			   " font-weight: bold;");
 	msg->setAlignment(Qt::AlignCenter);
 	msg->setWordWrap(true);
