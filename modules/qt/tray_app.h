@@ -58,8 +58,6 @@ private slots:
 	void onQuit();
 	void onAccountToggled(QAction *action);
 	void onPresenceToggled();
-	void onDialContact(QAction *action);
-	void onDialHistory(QAction *action);
 	void onAnswer(quintptr callPtr);
 	void onReject(quintptr callPtr, QString peerUri, QString peerName);
 	void onHangup(quintptr callPtr);
@@ -68,11 +66,6 @@ private slots:
 private:
 	void buildMenu();
 	void populateAccounts();
-	void populateContacts();
-	void populateHistoryMenu();
-	QAction *makeHistoryAction(const QString &uri, int callType,
-				   const QString &info, const QDateTime &ts,
-				   uint32_t duration);
 	QAction *findAccountAction(quintptr uaPtr) const;
 	void setTrayIcon(const QString &themeName, const QString &fallback);
 	QMenu *addCallMenu(quintptr callPtr, const QString &title);
@@ -86,8 +79,6 @@ private:
 	QSystemTrayIcon *trayIcon_ = nullptr;
 	QMenu *menu_ = nullptr;
 	QMenu *accountsMenu_ = nullptr;
-	QMenu *contactsMenu_ = nullptr;
-	QMenu *historyMenu_ = nullptr;
 	QAction *presenceAct_ = nullptr;
 	QActionGroup *accountsGroup_ = nullptr;
 	bool presenceOpen_ = true;
@@ -108,8 +99,6 @@ private:
 
 	/* One dialpad window per call, reused/raised if already open. */
 	QHash<quintptr, QPointer<DialpadDialog>> dialpads_;
-
-	int historyLength_ = 0;
 
 	/* Cursor position at the last tray-icon activation -- a proxy
 	 * for the icon's screen position (the cursor is over the icon

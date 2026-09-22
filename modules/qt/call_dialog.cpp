@@ -439,7 +439,21 @@ void CallDialog::buildUi()
 	label->setText("Enter SIP URI or number:");
 	topRow->addWidget(label);
 	topRow->addStretch();
-	listToggleBtn_ = new QPushButton("History/Contact", panel);
+	listToggleBtn_ = new QPushButton(panel);
+	{
+		/* QPushButton can't render rich text — embed a
+		 * click-through QLabel carrying the text so the
+		 * active view's word can be bolded. */
+		auto *bl = new QHBoxLayout(listToggleBtn_);
+		bl->setContentsMargins(8, 0, 8, 0);
+		listToggleLabel_ = new QLabel(listToggleBtn_);
+		listToggleLabel_->setTextFormat(Qt::RichText);
+		listToggleLabel_->setAlignment(Qt::AlignCenter);
+		listToggleLabel_->setAttribute(
+			Qt::WA_TransparentForMouseEvents);
+		bl->addWidget(listToggleLabel_);
+		updateToggleText();
+	}
 	topRow->addWidget(listToggleBtn_);
 	layout->addLayout(topRow);
 	connect(listToggleBtn_, &QPushButton::clicked,
@@ -745,10 +759,28 @@ void CallDialog::onToggleList()
 
 void CallDialog::refreshList()
 {
+	updateToggleText();
 	if (showingContacts_)
 		refreshContacts();
 	else
 		refreshHistory();
+}
+
+
+void CallDialog::updateToggleText()
+{
+	if (!listToggleLabel_)
+		return;
+	listToggleLabel_->setText(showingContacts_
+		? QStringLiteral("History/<b>Contact</b>")
+		: QStringLiteral("<b>History</b>/Contact"));
+}
+
+
+void CallDialog::showContacts(bool contacts)
+{
+	showingContacts_ = contacts;
+	refreshList();
 }
 
 

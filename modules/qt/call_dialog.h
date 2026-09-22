@@ -29,6 +29,7 @@ class QListWidgetItem;
 class QSystemTrayIcon;
 class QFrame;
 class QIcon;
+class QLabel;
 class QResizeEvent;
 class QHideEvent;
 
@@ -52,6 +53,11 @@ public:
 	/** Refresh the history list from the persistent store. Only
 	 *  shown in Dialing state. */
 	void refreshHistory();
+
+	/** Switch the list between the history view (false) and the
+	 *  contacts view (true); refreshes the list and the toggle
+	 *  button text. */
+	void showContacts(bool contacts);
 
 	/** Populate the dial entry with a number (Dialing state).
 	 *  The call is NOT placed until the green button is clicked. */
@@ -128,6 +134,8 @@ private:
 	void fitWidthToHistory();
 	void refreshList();
 	void refreshContacts();
+	/** Bold the active word on the "History/Contact" toggle. */
+	void updateToggleText();
 
 	/** Row widget for a list item: a click-through label plus
 	 *  action buttons at the right end (add/edit/delete). */
@@ -162,6 +170,7 @@ private:
 	QPushButton  *redBtn_     = nullptr;
 	QPushButton  *dialpadBtn_ = nullptr;
 	QPushButton  *listToggleBtn_ = nullptr;
+	QLabel       *listToggleLabel_ = nullptr;
 	QListWidget  *historyList_ = nullptr;
 
 	/* Contact add/edit overlay form + delete-confirm overlay. */

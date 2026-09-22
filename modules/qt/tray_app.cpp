@@ -136,13 +136,23 @@ void TrayApp::buildMenu()
 	QAction *dialAct = menu_->addAction("Call/Dial ...");
 	connect(dialAct, &QAction::triggered, this, &TrayApp::onDial);
 
-	/* Call history */
-	historyMenu_ = menu_->addMenu("Call History");
-	populateHistoryMenu();
+	/* Call history — direct link to the dial panel showing the
+	 * history list. */
+	QAction *histAct = menu_->addAction("Call History ...");
+	connect(histAct, &QAction::triggered, this, [this]() {
+		onDial();
+		if (idleCallDialog_)
+			idleCallDialog_->showContacts(false);
+	});
 
-	/* Dial contact */
-	contactsMenu_ = menu_->addMenu("Call Contact");
-	populateContacts();
+	/* Contacts — direct link to the dial panel showing the
+	 * contacts list. */
+	QAction *contactAct = menu_->addAction("Call Contact ...");
+	connect(contactAct, &QAction::triggered, this, [this]() {
+		onDial();
+		if (idleCallDialog_)
+			idleCallDialog_->showContacts(true);
+	});
 
 	menu_->addSeparator();
 
@@ -186,41 +196,6 @@ void TrayApp::populateAccounts()
 		QList<QAction *> actions = accountsGroup_->actions();
 		if (!actions.isEmpty())
 			actions.first()->setChecked(true);
-	}
-}
-
-
-void TrayApp::populateContacts()
-{
-	struct contacts *contacts = baresip_contacts();
-	struct le *le;
-
-	for (le = list_head(contact_list(contacts)); le; le = le->next) {
-		struct contact *c = static_cast<struct contact *>(le->data);
-
-		/* Label is "Name  number" — the SIP URI is stripped.
-		 * The bare number is stored in the action and goes to
-		 * the dial field; the full URI is reconstructed on
-		 * dialing (account_uri_complete_strdup). */
-		/* Dial target: the bare number for dialable contacts on
-		 * our domain, the full sip: URI for foreign addresses. */
-		QString target = uriToTarget(contact_uri(c));
-		QString name;
-		const struct sip_addr *addr = contact_addr(c);
-		if (addr && pl_isset(&addr->dname))
-			name = QString::fromUtf8(addr->dname.p,
-						 (int)addr->dname.l)
-				.remove('"').trimmed();
-
-		QString label = name.isEmpty()
-			? target
-			: QString("%1  %2").arg(name, target);
-
-		QAction *act = contactsMenu_->addAction(label);
-		act->setData(target);
-		connect(act, &QAction::triggered, this, [this, act]() {
-			onDialContact(act);
-		});
 	}
 }
 
@@ -306,15 +281,6 @@ void TrayApp::onDial()
 		this, [this](QString uri) {
 		QByteArray u = uri.toUtf8();
 		qt_mod_connect(u.constData());
-	});
-
-	/* After a contact add/edit/delete in the dial panel, repopulate
-	 * the Call Contact submenu from the re-synced list. */
-	connect(idleCallDialog_, &CallDialog::contactsSaved,
-		this, [this]() {
-		contactsMenu_->clear();
-		populateContacts();
-		refreshTrayMenu();
 	});
 
 	idleCallDialog_->setAnchorPoint(trayClickPos_);
@@ -406,28 +372,6 @@ void TrayApp::openDialNumber(QString number)
 	onDial();
 	if (idleCallDialog_ && !number.isEmpty())
 		idleCallDialog_->setDialNumber(number);
-}
-
-
-void TrayApp::onDialContact(QAction *action)
-{
-	/* Pass the contact's number to the dial panel — the user
-	 * presses the green button to place the call. */
-	QString number = action->data().toString();
-	if (number.isEmpty())
-		return;
-
-	onDial();
-	idleCallDialog_->setDialNumber(number);
-}
-
-
-void TrayApp::onDialHistory(QAction *action)
-{
-	/* URI is stored in the action's data (see addHistory). */
-	QByteArray uri = action->data().toString().toUtf8();
-	if (!uri.isEmpty())
-		qt_mod_connect(uri.constData());
 }
 
 
@@ -715,75 +659,6 @@ void TrayApp::callEstablished(quintptr callPtr)
 }
 
 
-QAction *TrayApp::makeHistoryAction(const QString &uri, int callType,
-				    const QString &info, const QDateTime &ts,
-				    uint32_t duration)
-{
-	QString iconName, fallback;
-
-	switch (callType) {
-	case CALL_INCOMING:
-		iconName = "call-incoming-symbolic"; fallback = "go-next";
-		break;
-	case CALL_OUTGOING:
-		iconName = "call-outgoing-symbolic"; fallback = "go-previous";
-		break;
-	case CALL_MISSED:
-		iconName = "call-missed-symbolic"; fallback = "call-stop";
-		break;
-	case CALL_REJECTED:
-		iconName = "window-close"; fallback = "call-stop";
-		break;
-	default:
-		iconName = "call-start"; fallback = QString();
-		break;
-	}
-
-	/* Single-line label matching the CallDialog history list:
-	 * "uri  (M:SS)  MM-dd hh:mm" — duration only when connected. */
-	QString label;
-	if (duration > 0) {
-		QString dur = QString("%1:%2")
-			.arg(duration / 60)
-			.arg(duration % 60, 2, 10, QChar('0'));
-		label = QString("%1  (%3)  %2")
-			.arg(info.isEmpty() ? uri : info,
-			     ts.toString("MM-dd hh:mm"), dur);
-	}
-	else {
-		label = QString("%1  %2")
-			.arg(info.isEmpty() ? uri : info,
-			     ts.toString("MM-dd hh:mm"));
-	}
-
-	QAction *act = new QAction(label);
-	QIcon icon = QIcon::fromTheme(iconName);
-	if (icon.isNull() && !fallback.isEmpty())
-		icon = QIcon::fromTheme(fallback);
-	if (!icon.isNull())
-		act->setIcon(icon);
-	act->setData(uri);
-	connect(act, &QAction::triggered, this, [this, act]() {
-		onDialHistory(act);
-	});
-
-	return act;
-}
-
-
-void TrayApp::populateHistoryMenu()
-{
-	/* Load persisted entries (oldest first) so the submenu shows
-	 * history across restarts, not just calls from this session. */
-	auto entries = CallHistory::instance()->recent(20);
-	for (const CallHistoryEntry &e : entries)
-		historyMenu_->addAction(makeHistoryAction(
-			e.target(), e.type, e.info, e.ts, e.duration));
-
-	historyLength_ = entries.size();
-}
-
-
 void TrayApp::addHistory(QString number, QString uri, int callType,
 			 QString info)
 {
@@ -792,24 +667,6 @@ void TrayApp::addHistory(QString number, QString uri, int callType,
 	CallHistory::instance()->add(number, uri, callType, info);
 	if (idleCallDialog_)
 		idleCallDialog_->refreshHistory();
-
-	QString target = number.isEmpty() ? uri : number;
-	QAction *act = makeHistoryAction(target, callType, info,
-					 QDateTime::currentDateTime(), 0);
-
-	if (historyLength_ >= 20) {
-		QList<QAction *> acts = historyMenu_->actions();
-		if (!acts.isEmpty()) {
-			QAction *oldest = acts.first();
-			historyMenu_->removeAction(oldest);
-			oldest->deleteLater();
-		}
-	}
-	else {
-		historyLength_++;
-	}
-
-	historyMenu_->addAction(act);
 }
 
 
