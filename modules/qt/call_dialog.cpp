@@ -952,26 +952,34 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 	{
 		/* Same dialog style as the parent panel — themed
 		 * palette(window) fill at ~84% opacity so it still
-		 * reads as an overlay, palette(dark) border, and
+		 * reads as an overlay, mid-grey border, and
 		 * palette(text) labels (works on light and dark
 		 * themes). */
 		QColor bg = palette().color(QPalette::Window);
 		formOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,215);"
-			"         border: 2px solid palette(dark);"
+			"         border: 2px solid #808080;"
 			"         border-radius: 8px; }"
 			"QLabel { color: palette(text); }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
 
-	/* Cover the panel with a small margin so the form fields
-	 * stay comfortably wide. */
+	/* Cover the panel with a small margin — extra room at the
+	 * top for the title. */
 	int mw = panel_->width() / 20;
-	int mh = panel_->height() / 10;
-	formOverlay_->setGeometry(mw, mh,
-		panel_->width() - 2 * mw, panel_->height() - 2 * mh);
+	int mt = panel_->height() / 5;
+	int mb = panel_->height() / 10;
+	formOverlay_->setGeometry(mw, mt,
+		panel_->width() - 2 * mw, panel_->height() - mt - mb);
 
 	auto *lay = new QVBoxLayout(formOverlay_);
+
+	auto *title = new QLabel(editingContact_ >= 0
+		? "Edit Contact" : "Add Contact", formOverlay_);
+	title->setStyleSheet("font-weight: bold; font-size: 15px;");
+	title->setAlignment(Qt::AlignCenter);
+	lay->addWidget(title);
+
 	auto *form = new QFormLayout();
 	cNameEdit_ = new QLineEdit(formOverlay_);
 	cNumEdit_  = new QLineEdit(formOverlay_);
@@ -1059,12 +1067,12 @@ void CallDialog::confirmOverlay(const QString &text,
 	deleteOverlay_ = new QFrame(panel_);
 	{
 		/* Themed like the parent panel (palette(window) at
-		 * ~78% opacity, palette(dark) border) so it matches
+		 * ~78% opacity, mid-grey border) so it matches
 		 * the active color scheme. */
 		QColor bg = palette().color(QPalette::Window);
 		deleteOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,200);"
-			"         border: 2px solid palette(dark);"
+			"         border: 2px solid #808080;"
 			"         border-radius: 8px; }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
@@ -1133,10 +1141,11 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 		return;
 	if (formOverlay_) {
 		int mw = panel_->width() / 20;
-		int mh = panel_->height() / 10;
-		formOverlay_->setGeometry(mw, mh,
+		int mt = panel_->height() / 5;
+		int mb = panel_->height() / 10;
+		formOverlay_->setGeometry(mw, mt,
 			panel_->width() - 2 * mw,
-			panel_->height() - 2 * mh);
+			panel_->height() - mt - mb);
 	}
 	if (deleteOverlay_) {
 		int mw = panel_->width() / 5;

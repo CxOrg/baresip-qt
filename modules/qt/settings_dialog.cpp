@@ -1019,11 +1019,11 @@ void SettingsDialog::onRemoveAccount()
 	{
 		/* Same dialog style as the parent panel — themed
 		 * palette(window) fill at ~78% opacity so it still
-		 * reads as an overlay, palette(dark) border. */
+		 * reads as an overlay, mid-grey border. */
 		QColor bg = palette().color(QPalette::Window);
 		confirmOverlay_->setStyleSheet(QString(
 			"QFrame { background-color: rgba(%1,%2,%3,200);"
-			"         border: 2px solid palette(dark);"
+			"         border: 2px solid #808080;"
 			"         border-radius: 8px; }")
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
