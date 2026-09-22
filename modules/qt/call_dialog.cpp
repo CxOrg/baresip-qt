@@ -784,10 +784,11 @@ void CallDialog::refreshContacts()
 
 /* ---- per-row action buttons + overlays ---------------------------- */
 
-/** Small flat icon button used at the right end of a list row. */
+/** Small flat icon button used at the right end of a list row.
+ *  No tooltip — tooltips can show through the overlays. */
 static QToolButton *rowButton(const QString &iconName,
 			      const QString &fallbackText,
-			      const QString &tip, QWidget *parent)
+			      QWidget *parent)
 {
 	auto *b = new QToolButton(parent);
 	QIcon ic = QIcon::fromTheme(iconName);
@@ -795,7 +796,6 @@ static QToolButton *rowButton(const QString &iconName,
 		b->setIcon(ic);
 	else
 		b->setText(fallbackText);
-	b->setToolTip(tip);
 	b->setAutoRaise(true);
 	b->setFixedSize(22, 22);
 	return b;
@@ -825,10 +825,8 @@ QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
 	l->addWidget(text, 1);
 
 	if (showingContacts_) {
-		QToolButton *edit = rowButton("document-edit", "\u270E",
-					    "Edit contact", row);
-		QToolButton *del  = rowButton("edit-delete", "\u2715",
-					    "Delete contact", row);
+		QToolButton *edit = rowButton("document-edit", "\u270E", row);
+		QToolButton *del  = rowButton("edit-delete", "\u2715", row);
 		l->addWidget(edit);
 		l->addWidget(del);
 
@@ -854,10 +852,8 @@ QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
 		});
 	}
 	else {
-		QToolButton *add = rowButton("list-add", "+",
-					     "Add contact", row);
-		QToolButton *del = rowButton("edit-delete", "\u2715",
-					     "Delete history entry", row);
+		QToolButton *add = rowButton("list-add", "+", row);
+		QToolButton *del = rowButton("edit-delete", "\u2715", row);
 		l->addWidget(add);
 		l->addWidget(del);
 
@@ -1082,9 +1078,9 @@ void CallDialog::confirmOverlay(const QString &text,
 			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
 	}
 
-	/* 20% horizontal, 30% vertical margins — same as the
-	 * settings account-removal overlay. */
-	int mw = panel_->width() / 5;
+	/* 10% horizontal, 30% vertical margins — wide enough for
+	 * the message to render on one line. */
+	int mw = panel_->width() / 10;
 	int mh = panel_->height() * 3 / 10;
 	deleteOverlay_->setGeometry(mw, mh,
 		panel_->width() - 2 * mw, panel_->height() - 2 * mh);
@@ -1158,7 +1154,7 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 			panel_->height() - mt - mb);
 	}
 	if (deleteOverlay_) {
-		int mw = panel_->width() / 5;
+		int mw = panel_->width() / 10;
 		int mh = panel_->height() * 3 / 10;
 		deleteOverlay_->setGeometry(mw, mh,
 			panel_->width() - 2 * mw,
