@@ -1308,14 +1308,24 @@ void CallDialog::showImportInstructions()
 	importOverlay_->raise();
 
 	connect(importBtn, &QPushButton::clicked, this, [this]() {
-		if (importOverlay_)
-			importOverlay_->deleteLater();
-		importOverlay_ = nullptr;
+		/* Keep the import overlay visible while the file browser
+		 * is open so the dial panel doesn't lose focus and hide.
+		 * The panel is re-shown after the dialog closes. */
 		QString path = QFileDialog::getOpenFileName(
 			this, "Import Contacts CSV", QString(),
 			"CSV Files (*.csv)");
-		if (!path.isEmpty())
-			importCsv(path);
+		if (importOverlay_) {
+			importOverlay_->deleteLater();
+			importOverlay_ = nullptr;
+		}
+		if (path.isEmpty())
+			return;
+		/* Re-show the panel in case it was hidden by the
+		 * file dialog grabbing focus. */
+		show();
+		raise();
+		activateWindow();
+		importCsv(path);
 	});
 	connect(cancelBtn, &QPushButton::clicked, this, [this]() {
 		if (importOverlay_)
