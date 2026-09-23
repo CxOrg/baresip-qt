@@ -58,6 +58,7 @@ private slots:
 	void onQuit();
 	void onAccountToggled(QAction *action);
 	void onPresenceToggled();
+	void onImportCsv();
 	void onAnswer(quintptr callPtr);
 	void onReject(quintptr callPtr, QString peerUri, QString peerName);
 	void onHangup(quintptr callPtr);
