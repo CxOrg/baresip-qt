@@ -1261,24 +1261,26 @@ void CallDialog::showImportInstructions()
 	auto *lay = new QVBoxLayout(importOverlay_);
 	lay->setSpacing(8);
 
-	auto *title = new QLabel("Import Contacts from CSV",
+	auto *title = new QLabel("Note: CSV columns are imported as follows.",
 				 importOverlay_);
-	title->setStyleSheet("font-weight: bold; font-size: 15px;"
+	title->setStyleSheet("font-weight: bold; font-size: 16px;"
 			     " border: none;");
-	title->setAlignment(Qt::AlignCenter);
+	title->setWordWrap(true);
+	title->setAlignment(Qt::AlignLeft);
 	lay->addWidget(title);
 
 	auto *note = new QLabel(
-		"Note: CSV columns are imported as follows.\n"
-		"1 - Multiple name columns are concatenated to 1 "
-		"Name column.\n"
-		"2 - Multiple phone columns Home Phone, Mobile Phone, "
+		"<ol style=\"margin-left: 20px;\">"
+		"<li>Multiple name columns are concatenated to 1 Name "
+		"column.</li>"
+		"<li>Multiple phone columns Home Phone, Mobile Phone, "
 		"Business Phone, SIP Phone etc create multiple records "
-		"with Home, Mobile, Business as type.\n"
-		"3 - The number or URI is imported as is.\n"
-		"4 - All other columns are ignored.",
+		"with Home, Mobile, Business as type.</li>"
+		"<li>The number or URI is imported as is.</li>"
+		"<li>All other columns are ignored.</li>"
+		"</ol>",
 		importOverlay_);
-	note->setStyleSheet("border: none; font-size: 13px;");
+	note->setStyleSheet("border: none; font-size: 15px;");
 	note->setWordWrap(true);
 	lay->addWidget(note, 1);
 

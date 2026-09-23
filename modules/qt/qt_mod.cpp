@@ -747,7 +747,7 @@ static int qt_thread(void *arg)
 	 * for item that was just removed" when QFileDialog populates
 	 * its file listing under KDE Plasma. */
 	QLoggingCategory::setFilterRules(
-		"kf.windowsystem=false;"
+		"kf.windowsystem=false\n"
 		"kf.kio.widgets.kdirmodel=false");
 
 #ifdef HAVE_KSTYLE
