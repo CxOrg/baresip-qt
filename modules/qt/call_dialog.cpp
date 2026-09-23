@@ -605,7 +605,9 @@ void CallDialog::applyState()
 		greenBtn_->setText(isOutgoing_ ? "Call" : "Answer");
 		greenBtn_->setEnabled(false);
 		redBtn_->setText("Hangup");
-		dialpadWidget_->show();
+		/* DTMF dialpad only for outgoing calls (navigating IVR
+		 * systems); not needed for incoming calls. */
+		dialpadWidget_->setVisible(isOutgoing_);
 		historyList_->hide();
 		break;
 	}
