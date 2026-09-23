@@ -1270,17 +1270,17 @@ void CallDialog::showImportInstructions()
 	lay->addWidget(title);
 
 	auto *note = new QLabel(
-		"<ol style=\"margin-left: 20px;\">"
-		"<li>Multiple name columns are concatenated to 1 Name "
+		"<ol style=\"margin-left: 10px;\">"
+		"<li>Multiple Name columns are concatenated to 1 Name "
 		"column.</li>"
-		"<li>Multiple phone columns Home Phone, Mobile Phone, "
+		"<li>Multiple Phone columns Home Phone, Mobile Phone, "
 		"Business Phone, SIP Phone etc create multiple records "
 		"with Home, Mobile, Business as type.</li>"
 		"<li>The number or URI is imported as is.</li>"
 		"<li>All other columns are ignored.</li>"
 		"</ol>",
 		importOverlay_);
-	note->setStyleSheet("border: none; font-size: 15px;");
+	note->setStyleSheet("border: none; font-size: 17px;");
 	note->setWordWrap(true);
 	lay->addWidget(note, 1);
 
