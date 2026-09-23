@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QTabBar>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -1234,6 +1235,94 @@ void CallDialog::confirmOverlay(const QString &text,
 }
 
 
+void CallDialog::showImportInstructions()
+{
+	if (importOverlay_)
+		importOverlay_->deleteLater();
+
+	importOverlay_ = new QFrame(panel_);
+	{
+		QColor bg = palette().color(QPalette::Window);
+		importOverlay_->setStyleSheet(QString(
+			"QFrame { background-color: rgba(%1,%2,%3,230);"
+			"         border: 1px solid #808080;"
+			"         border-radius: 8px; }"
+			"QLabel { border: none; color: palette(text); }")
+			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
+	}
+
+	/* Cover 90% of the panel — 5% margin all sides. */
+	int mw = panel_->width() / 20;
+	int mh = panel_->height() / 20;
+	importOverlay_->setGeometry(mw, mh,
+		panel_->width() - 2 * mw,
+		panel_->height() - 2 * mh);
+
+	auto *lay = new QVBoxLayout(importOverlay_);
+	lay->setSpacing(8);
+
+	auto *title = new QLabel("Import Contacts from CSV",
+				 importOverlay_);
+	title->setStyleSheet("font-weight: bold; font-size: 15px;"
+			     " border: none;");
+	title->setAlignment(Qt::AlignCenter);
+	lay->addWidget(title);
+
+	auto *note = new QLabel(
+		"Note: CSV columns are imported as follows.\n"
+		"1 - Multiple name columns are concatenated to 1 "
+		"Name column.\n"
+		"2 - Multiple phone columns Home Phone, Mobile Phone, "
+		"Business Phone, SIP Phone etc create multiple records "
+		"with Home, Mobile, Business as type.\n"
+		"3 - The number or URI is imported as is.\n"
+		"4 - All other columns are ignored.",
+		importOverlay_);
+	note->setStyleSheet("border: none; font-size: 13px;");
+	note->setWordWrap(true);
+	lay->addWidget(note, 1);
+
+	auto *btnRow = new QHBoxLayout();
+	btnRow->setAlignment(Qt::AlignCenter);
+	btnRow->setSpacing(20);
+
+	auto *importBtn = new QPushButton("Import", importOverlay_);
+	importBtn->setStyleSheet(
+		"QPushButton { background-color: #2e7d32; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #1b5e20; }");
+	auto *cancelBtn = new QPushButton("Cancel", importOverlay_);
+	cancelBtn->setStyleSheet(
+		"QPushButton { background-color: #424242; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #616161; }");
+	btnRow->addWidget(importBtn);
+	btnRow->addWidget(cancelBtn);
+	lay->addLayout(btnRow);
+
+	importOverlay_->show();
+	importOverlay_->raise();
+
+	connect(importBtn, &QPushButton::clicked, this, [this]() {
+		if (importOverlay_)
+			importOverlay_->deleteLater();
+		importOverlay_ = nullptr;
+		QString path = QFileDialog::getOpenFileName(
+			this, "Import Contacts CSV", QString(),
+			"CSV Files (*.csv)");
+		if (!path.isEmpty())
+			importCsv(path);
+	});
+	connect(cancelBtn, &QPushButton::clicked, this, [this]() {
+		if (importOverlay_)
+			importOverlay_->deleteLater();
+		importOverlay_ = nullptr;
+	});
+}
+
+
 void CallDialog::importCsv(const QString &path)
 {
 	/* Parse the CSV file: header row identifies name/phone columns.
@@ -1391,6 +1480,13 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 			panel_->width() - 2 * mw,
 			panel_->height() - 2 * mh);
 	}
+	if (importOverlay_) {
+		int mw = panel_->width() / 20;
+		int mh = panel_->height() / 20;
+		importOverlay_->setGeometry(mw, mh,
+			panel_->width() - 2 * mw,
+			panel_->height() - 2 * mh);
+	}
 }
 
 
@@ -1406,6 +1502,10 @@ void CallDialog::hideEvent(QHideEvent *ev)
 		pendingDelete_ = nullptr;
 		deleteOverlay_->deleteLater();
 		deleteOverlay_ = nullptr;
+	}
+	if (importOverlay_) {
+		importOverlay_->deleteLater();
+		importOverlay_ = nullptr;
 	}
 	QDialog::hideEvent(ev);
 }

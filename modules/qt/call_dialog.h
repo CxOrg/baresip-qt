@@ -65,6 +65,11 @@ public:
 	 *  merges with existing contacts, sorts, and saves. */
 	void importCsv(const QString &path);
 
+	/** Show the CSV import instructions overlay with Import and
+	 *  Cancel buttons. Import opens the file browser; Cancel
+	 *  closes the overlay. */
+	void showImportInstructions();
+
 	/** Populate the dial entry with a number (Dialing state).
 	 *  The call is NOT placed until the green button is clicked. */
 	void setDialNumber(const QString &number);
@@ -183,6 +188,7 @@ private:
 	/* Contact add/edit overlay form + delete-confirm overlay. */
 	QFrame    *formOverlay_   = nullptr;
 	QFrame    *deleteOverlay_ = nullptr;
+	QFrame    *importOverlay_ = nullptr;
 	QLineEdit *cNameEdit_     = nullptr;
 	QLineEdit *cNumEdit_      = nullptr;
 	QComboBox *cTypeEdit_     = nullptr;

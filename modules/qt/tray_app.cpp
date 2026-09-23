@@ -9,7 +9,6 @@
 
 #include <QMessageBox>
 #include <QInputDialog>
-#include <QFileDialog>
 #include <QIcon>
 #include <QPainter>
 #include <QDateTime>
@@ -382,20 +381,13 @@ void TrayApp::openDialNumber(QString number)
 
 void TrayApp::onImportCsv()
 {
-	/* Open the system file dialog, filtered to *.csv files. */
-	QString path = QFileDialog::getOpenFileName(nullptr,
-		"Import Contacts CSV", QString(),
-		"CSV Files (*.csv)");
-	if (path.isEmpty())
-		return;
-
 	/* Open the dial panel and switch to the contacts view, then
-	 * delegate the CSV parsing + confirmation overlay to the
-	 * CallDialog. */
+	 * show the import instructions overlay — the file browser is
+	 * opened from the overlay's Import button. */
 	onDial();
 	if (idleCallDialog_) {
 		idleCallDialog_->showContacts(true);
-		idleCallDialog_->importCsv(path);
+		idleCallDialog_->showImportInstructions();
 	}
 }
 
