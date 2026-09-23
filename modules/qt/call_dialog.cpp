@@ -1031,8 +1031,8 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 	cTypeEdit_ = new QComboBox(formOverlay_);
 	cTypeEdit_->setEditable(true);
 	cTypeEdit_->addItems(QStringList()
-		<< "General" << "Work" << "Home" << "Mobile"
-		<< "Fax" << "Other");
+		<< "Primary" << "Work" << "Home" << "Mobile"
+		<< "SIP" << "Fax" << "Other");
 	cNumEdit_  = new QLineEdit(formOverlay_);
 	form->addRow("Name:", cNameEdit_);
 	form->addRow("Type:",  cTypeEdit_);
