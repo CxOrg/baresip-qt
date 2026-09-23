@@ -1304,9 +1304,10 @@ void CallDialog::importCsv(const QString &path)
 		}
 		if (name.isEmpty())
 			continue;
-		uniqueNames.insert(name);
 
-		/* Each populated phone column → one record. */
+		/* Each populated phone column → one record. Skip
+		 * the row entirely if no phone column is populated. */
+		bool anyPhone = false;
 		for (int i = 0; i < phoneCols.size(); ++i) {
 			int col = phoneCols[i];
 			if (col >= fields.size())
@@ -1314,6 +1315,7 @@ void CallDialog::importCsv(const QString &path)
 			QString number = fields[col].trimmed();
 			if (number.isEmpty())
 				continue;
+			anyPhone = true;
 
 			ContactEntry e;
 			e.name = name;
@@ -1329,6 +1331,8 @@ void CallDialog::importCsv(const QString &path)
 				e.uri = completeUri(number, QString());
 			imported.append(e);
 		}
+		if (anyPhone)
+			uniqueNames.insert(name);
 	}
 
 	if (imported.isEmpty()) {
