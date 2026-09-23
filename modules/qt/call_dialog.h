@@ -32,6 +32,7 @@ class QIcon;
 class QResizeEvent;
 class QHideEvent;
 class QTabBar;
+class QComboBox;
 
 class CallDialog : public QDialog {
 	Q_OBJECT
@@ -101,6 +102,7 @@ public:
 	 *  file-local parse/format helpers in the .cpp can use it. */
 	struct ContactEntry {
 		QString name;
+		QString type;   /**< contact type (Work, Home, ...). */
 		QString uri;
 		QString params;
 	};
@@ -176,6 +178,7 @@ private:
 	QFrame    *deleteOverlay_ = nullptr;
 	QLineEdit *cNameEdit_     = nullptr;
 	QLineEdit *cNumEdit_      = nullptr;
+	QComboBox *cTypeEdit_     = nullptr;
 	int editingContact_ = -1;
 	QList<ContactEntry> contactEntries_;
 	QStringList           preservedLines_;

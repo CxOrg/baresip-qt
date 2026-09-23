@@ -10,6 +10,7 @@
 #include <QToolButton>
 #include <QLabel>
 #include <QTabBar>
+#include <QComboBox>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -43,9 +44,11 @@ static QString contactsPath()
 	return QDir::homePath() + "/.baresip/contacts";
 }
 
-/** Parse a contacts-file line into name/uri/params. Handles
- *  `"Name" <sip:user@host>;params`, bare `<sip:...>` and plain
- *  `sip:...` lines. Returns false for comments/blank lines. */
+/** Parse a contacts-file line into name/type/uri/params. Handles
+ *  `"Name" <sip:user@host>;type=Work;params`, bare `<sip:...>` and
+ *  plain `sip:...` lines. Returns false for comments/blank lines.
+ *  The type is stored as a `;type=...` URI parameter; extracted
+ *  into `e.type` and stripped from `e.params`. */
 static bool parseContactLine(const QString &line,
 			     CallDialog::ContactEntry &e)
 {
@@ -68,18 +71,43 @@ static bool parseContactLine(const QString &line,
 		e.uri = t;
 		e.params.clear();
 	}
+
+	/* Extract ;type=... from params into e.type. */
+	e.type.clear();
+	if (!e.params.isEmpty()) {
+		QStringList parts = e.params.split(';',
+			Qt::SkipEmptyParts);
+		QStringList rest;
+		for (const QString &p : parts) {
+			QString pt = p.trimmed();
+			if (pt.startsWith("type=", Qt::CaseInsensitive))
+				e.type = pt.mid(5).trimmed();
+			else
+				rest.append(pt);
+		}
+		e.params = rest.isEmpty()
+			? QString()
+			: ";" + rest.join(";");
+	}
 	return true;
 }
 
-/** Render a ContactEntry back to a contacts-file line. */
+/** Render a ContactEntry back to a contacts-file line. The type
+ *  is stored as a `;type=...` URI parameter. */
 static QString contactLine(const CallDialog::ContactEntry &e)
 {
 	QString line;
 	if (!e.name.isEmpty())
 		line = QString("\"%1\" ").arg(e.name);
 	line += "<" + e.uri + ">";
-	if (!e.params.isEmpty())
-		line += e.params;
+	QString params = e.params;
+	if (!e.type.isEmpty()) {
+		QString tp = "type=" + e.type;
+		params = params.isEmpty() ? ";" + tp
+					   : params + ";" + tp;
+	}
+	if (!params.isEmpty())
+		line += params;
 	return line;
 }
 
@@ -775,9 +803,18 @@ void CallDialog::refreshContacts()
 	for (int i = 0; i < contactEntries_.size(); ++i) {
 		const ContactEntry &e = contactEntries_[i];
 		QString target = uriToTarget(e.uri.toUtf8().constData());
-		QString label = e.name.isEmpty()
-			? target
-			: QString("%1  %2").arg(e.name, target);
+		/* "Name  [Type]  number" — type shown in brackets
+		 * when present. */
+		QString label;
+		if (e.name.isEmpty() && e.type.isEmpty())
+			label = target;
+		else if (e.name.isEmpty())
+			label = QString("[%1]  %2").arg(e.type, target);
+		else if (e.type.isEmpty())
+			label = QString("%1  %2").arg(e.name, target);
+		else
+			label = QString("%1  [%2]  %3")
+				.arg(e.name, e.type, target);
 
 		auto *item = new QListWidgetItem();
 		item->setData(Qt::UserRole, target);
@@ -991,8 +1028,14 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 
 	auto *form = new QFormLayout();
 	cNameEdit_ = new QLineEdit(formOverlay_);
+	cTypeEdit_ = new QComboBox(formOverlay_);
+	cTypeEdit_->setEditable(true);
+	cTypeEdit_->addItems(QStringList()
+		<< "General" << "Work" << "Home" << "Mobile"
+		<< "Fax" << "Other");
 	cNumEdit_  = new QLineEdit(formOverlay_);
-	form->addRow("Name:",   cNameEdit_);
+	form->addRow("Name:", cNameEdit_);
+	form->addRow("Type:",  cTypeEdit_);
 	form->addRow("Number:", cNumEdit_);
 	lay->addLayout(form);
 
@@ -1007,6 +1050,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 	if (index >= 0 && index < contactEntries_.size()) {
 		const ContactEntry &e = contactEntries_[index];
 		cNameEdit_->setText(e.name);
+		cTypeEdit_->setEditText(e.type);
 		cNumEdit_->setText(uriToTarget(e.uri.toUtf8().constData()));
 	}
 	else if (prefill) {
@@ -1037,6 +1081,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 			QString oldNum = uriToNumber(
 				e.uri.toUtf8().constData());
 			e.name = name;
+			e.type = cTypeEdit_->currentText().trimmed();
 			if (uriInput)
 				e.uri = uriToFull(
 					number.toUtf8().constData());
@@ -1047,6 +1092,7 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 		else {
 			ContactEntry e;
 			e.name = name;
+			e.type = cTypeEdit_->currentText().trimmed();
 			e.uri  = uriInput
 				? uriToFull(number.toUtf8().constData())
 				: completeUri(number, QString());
