@@ -18,6 +18,7 @@
 #include <QDir>
 #include <QList>
 #include <QScreen>
+#include <QLoggingCategory>
 #include <QGuiApplication>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
@@ -734,6 +735,13 @@ static int qt_thread(void *arg)
 	QApplication app(qargc, qargv);
 	app.setApplicationName("baresip");
 	app.setQuitOnLastWindowClosed(false);
+
+	/* KWindowSystem (pulled in by KF6ConfigWidgets/KStyleManager)
+	 * can't load its platform plugin when QApplication runs on a
+	 * non-main thread — it falls back to a no-op implementation,
+	 * but logs a warning on every panel show. Suppress that
+	 * category to keep the console clean. */
+	QLoggingCategory::setFilterRules("kf.windowsystem=false");
 
 #ifdef HAVE_KSTYLE
 	/* Apply the user's configured KDE widget style (Breeze by default)
