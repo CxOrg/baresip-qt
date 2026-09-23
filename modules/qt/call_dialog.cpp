@@ -522,11 +522,9 @@ void CallDialog::buildUi()
 	uriEdit_->setAlignment(Qt::AlignLeft);
 	layout->addWidget(uriEdit_);
 
-	/* In-call DTMF dialpad launcher (hidden unless InCall). */
-	dialpadBtn_ = new QPushButton("Dialpad...", panel);
-	layout->addWidget(dialpadBtn_);
-	connect(dialpadBtn_, &QPushButton::clicked,
-		this, &CallDialog::onDialpad);
+	/* In-call DTMF dialpad (embedded, hidden unless InCall). */
+	buildDialpad(panel);
+	layout->addWidget(dialpadWidget_);
 
 	/* Call history list (shown only in Dialing state). */
 	historyList_ = new QListWidget(panel);
@@ -580,7 +578,7 @@ void CallDialog::applyState()
 		greenBtn_->setText("Call");
 		greenBtn_->setEnabled(true);
 		redBtn_->setText("Cancel");
-		dialpadBtn_->hide();
+		dialpadWidget_->hide();
 		historyList_->show();
 		refreshList();
 		break;
@@ -592,7 +590,7 @@ void CallDialog::applyState()
 		greenBtn_->setText("Answer");
 		greenBtn_->setEnabled(true);
 		redBtn_->setText("Hangup");
-		dialpadBtn_->hide();
+		dialpadWidget_->hide();
 		historyList_->hide();
 		break;
 
@@ -607,7 +605,7 @@ void CallDialog::applyState()
 		greenBtn_->setText(isOutgoing_ ? "Call" : "Answer");
 		greenBtn_->setEnabled(false);
 		redBtn_->setText("Hangup");
-		dialpadBtn_->show();
+		dialpadWidget_->show();
 		historyList_->hide();
 		break;
 	}
@@ -700,10 +698,61 @@ void CallDialog::onRed()
 }
 
 
-void CallDialog::onDialpad()
+void CallDialog::buildDialpad(QWidget *parent)
 {
-	emit dialpadRequested(callPtr_,
-		uriEdit_->text().isEmpty() ? peerName_ : uriEdit_->text());
+	dialpadWidget_ = new QWidget(parent);
+	dialpadWidget_->hide();
+
+	auto *vlay = new QVBoxLayout(dialpadWidget_);
+	vlay->setContentsMargins(0, 0, 0, 0);
+
+	/* 5% padding above the dialpad (panel ~320px → ~16px). */
+	vlay->addSpacing(16);
+
+	dialpadLog_ = new QLineEdit(dialpadWidget_);
+	dialpadLog_->setReadOnly(true);
+	dialpadLog_->setAlignment(Qt::AlignRight);
+	dialpadLog_->setPlaceholderText("Keys sent this session");
+	vlay->addWidget(dialpadLog_);
+
+	/* Grid container centred at 80% panel width. */
+	auto *gridWrap = new QHBoxLayout();
+	gridWrap->setContentsMargins(0, 0, 0, 0);
+	gridWrap->addStretch(1);
+
+	auto *grid = new QGridLayout();
+	grid->setSpacing(4);
+	static const char *keys[4][3] = {
+		{ "1", "2", "3" },
+		{ "4", "5", "6" },
+		{ "7", "8", "9" },
+		{ "*", "0", "#" },
+	};
+	for (int row = 0; row < 4; row++) {
+		for (int col = 0; col < 3; col++) {
+			const char *label = keys[row][col];
+			auto *btn = new QPushButton(label, dialpadWidget_);
+			btn->setMinimumSize(44, 44);
+			char key = label[0];
+			connect(btn, &QPushButton::clicked,
+				this, [this, key]() { sendDigit(key); });
+			grid->addWidget(btn, row, col);
+		}
+	}
+	gridWrap->addLayout(grid, 8);
+	gridWrap->addStretch(1);
+	vlay->addLayout(gridWrap);
+
+	/* 5% padding below the dialpad (panel ~320px → ~16px). */
+	vlay->addSpacing(16);
+}
+
+
+void CallDialog::sendDigit(char key)
+{
+	qt_mod_send_digit(reinterpret_cast<struct call *>(callPtr_), key);
+	if (dialpadLog_)
+		dialpadLog_->setText(dialpadLog_->text() + QChar(key));
 }
 
 

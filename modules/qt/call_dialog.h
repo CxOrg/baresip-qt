@@ -127,9 +127,6 @@ signals:
 	 *  reject the call. In InCall: hang up. */
 	void hangupRequested(quintptr callPtr);
 
-	/** User opened the in-call DTMF dialpad. */
-	void dialpadRequested(quintptr callPtr, QString peerLabel);
-
 	/** Emitted after the contacts file was rewritten — the tray
 	 *  repopulates the Call Contact submenu. */
 	void contactsSaved();
@@ -146,6 +143,7 @@ private:
 	void fitWidthToHistory();
 	void refreshList();
 	void refreshContacts();
+	void buildDialpad(QWidget *parent);
 
 	/** Row widget for a list item: a click-through label plus
 	 *  action buttons at the right end (add/edit/delete). */
@@ -180,7 +178,8 @@ private:
 	QLineEdit    *uriEdit_    = nullptr;
 	QPushButton  *greenBtn_   = nullptr;
 	QPushButton  *redBtn_     = nullptr;
-	QPushButton  *dialpadBtn_ = nullptr;
+	QWidget      *dialpadWidget_ = nullptr;
+	QLineEdit    *dialpadLog_    = nullptr;
 	QPushButton  *listToggleBtn_ = nullptr;
 	QTabBar      *listTabs_     = nullptr;
 	QListWidget  *historyList_ = nullptr;
@@ -200,7 +199,7 @@ private:
 private slots:
 	void onGreen();
 	void onRed();
-	void onDialpad();
+	void sendDigit(char key);
 	void onHistoryClicked(QListWidgetItem *item);
 	void onHistoryDoubleClicked(QListWidgetItem *item);
 };

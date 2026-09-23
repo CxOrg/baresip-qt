@@ -5,7 +5,6 @@
 #include "call_dialog.h"
 #include "call_history.h"
 #include "settings_dialog.h"
-#include "dialpad_dialog.h"
 
 #include <QMessageBox>
 #include <QInputDialog>
@@ -420,32 +419,6 @@ void TrayApp::onHangup(quintptr callPtr)
 }
 
 
-void TrayApp::openDialpad(quintptr callPtr, QString peerLabel)
-{
-	QPointer<DialpadDialog> &existing = dialpads_[callPtr];
-	if (existing) {
-		existing->raise();
-		existing->activateWindow();
-		return;
-	}
-
-	auto *dlg = new DialpadDialog(callPtr, peerLabel);
-	dialpads_[callPtr] = dlg;
-	dlg->show();
-}
-
-
-void TrayApp::addDialpadAction(QMenu *callMenu, quintptr callPtr,
-				const QString &peerLabel)
-{
-	QAction *dialpadAct = callMenu->addAction("Dialpad...");
-	connect(dialpadAct, &QAction::triggered,
-		this, [this, callPtr, peerLabel]() {
-			openDialpad(callPtr, peerLabel);
-		});
-}
-
-
 /* ---- slots invoked (via queued connection) from the re/core thread ---- */
 
 void TrayApp::accountsChanged()
@@ -502,8 +475,6 @@ void TrayApp::convertToHangup(quintptr callPtr, const QString &peerUri)
 		onHangup(callPtr);
 	});
 
-	addDialpadAction(callMenu, callPtr, peerUri);
-
 	refreshTrayMenu();
 }
 
@@ -556,10 +527,6 @@ void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 		this, [this, callPtr]() { onAnswer(callPtr); });
 	connect(dlg, &CallDialog::hangupRequested,
 		this, [this, callPtr]() { onHangup(callPtr); });
-	connect(dlg, &CallDialog::dialpadRequested,
-		this, [this](quintptr cp, QString label) {
-			openDialpad(cp, label);
-		});
 
 	if (dlg != idleCallDialog_) {
 		dlg->showPanel();
@@ -587,8 +554,6 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 		onHangup(callPtr);
 	});
 
-	addDialpadAction(callMenu, callPtr, peerUri);
-
 	/* Fully populated now -- attach it. */
 	menu_->insertMenu(menu_->actions().first(), callMenu);
 	callMenus_.insert(callPtr, callMenu);
@@ -603,10 +568,6 @@ void TrayApp::callOutgoing(quintptr callPtr, QString peerUri)
 
 	connect(dlg, &CallDialog::hangupRequested,
 		this, [this, callPtr]() { onHangup(callPtr); });
-	connect(dlg, &CallDialog::dialpadRequested,
-		this, [this](quintptr cp, QString label) {
-			openDialpad(cp, label);
-		});
 
 	dlg->showPanel();
 }
@@ -622,10 +583,6 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 		refreshTrayMenu();
 	}
 
-	QPointer<DialpadDialog> dlg = dialpads_.take(callPtr);
-	if (dlg)
-		dlg->close();
-
 	QPointer<CallDialog> cdlg = callDialogs_.take(callPtr);
 	if (cdlg) {
 		/* If this was the repurposed idle dialog, reset it to the
@@ -633,7 +590,6 @@ void TrayApp::callClosed(quintptr callPtr, bool missed,
 		if (cdlg == idleCallDialog_) {
 			disconnect(cdlg, &CallDialog::answerRequested, this, nullptr);
 			disconnect(cdlg, &CallDialog::hangupRequested, this, nullptr);
-			disconnect(cdlg, &CallDialog::dialpadRequested, this, nullptr);
 			cdlg->setStateDialing();
 			/* Re-wire the green button for outgoing calls. */
 			connect(cdlg, &CallDialog::callRequested,

@@ -14,7 +14,6 @@
 #include <QDateTime>
 
 class CallDialog;
-class DialpadDialog;
 class SettingsDialog;
 
 class TrayApp : public QObject {
@@ -62,7 +61,6 @@ private slots:
 	void onAnswer(quintptr callPtr);
 	void onReject(quintptr callPtr, QString peerUri, QString peerName);
 	void onHangup(quintptr callPtr);
-	void openDialpad(quintptr callPtr, QString peerLabel);
 
 private:
 	void buildMenu();
@@ -71,8 +69,6 @@ private:
 	void setTrayIcon(const QString &themeName, const QString &fallback);
 	QMenu *addCallMenu(quintptr callPtr, const QString &title);
 	void convertToHangup(quintptr callPtr, const QString &peerUri);
-	void addDialpadAction(QMenu *callMenu, quintptr callPtr,
-			       const QString &peerLabel);
 	void refreshTrayMenu();
 
 	struct qt_mod *mod_;
@@ -97,9 +93,6 @@ private:
 	 * always a Hang Up action available for any live call.
 	 */
 	QHash<quintptr, QMenu *> callMenus_;
-
-	/* One dialpad window per call, reused/raised if already open. */
-	QHash<quintptr, QPointer<DialpadDialog>> dialpads_;
 
 	/* Cursor position at the last tray-icon activation -- a proxy
 	 * for the icon's screen position (the cursor is over the icon
