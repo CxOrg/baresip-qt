@@ -155,14 +155,14 @@ void TrayApp::buildMenu()
 			idleCallDialog_->showContacts(true);
 	});
 
-	/* Import contacts from a CSV file. */
-	QAction *importAct = menu_->addAction("Import CSV ...");
-	connect(importAct, &QAction::triggered, this, &TrayApp::onImportCsv);
-
 	menu_->addSeparator();
 
 	QAction *settingsAct = menu_->addAction("Settings ...");
 	connect(settingsAct, &QAction::triggered, this, &TrayApp::onSettings);
+
+	/* Import contacts from a CSV file. */
+	QAction *importAct = menu_->addAction("Import CSV ...");
+	connect(importAct, &QAction::triggered, this, &TrayApp::onImportCsv);
 
 	QAction *aboutAct = menu_->addAction("About ...");
 	connect(aboutAct, &QAction::triggered, this, &TrayApp::onAbout);
