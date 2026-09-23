@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QTabBar>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -109,6 +110,43 @@ static QString contactLine(const CallDialog::ContactEntry &e)
 	if (!params.isEmpty())
 		line += params;
 	return line;
+}
+
+/** Parse a CSV line, handling quoted fields with embedded commas
+ *  and doubled-quote escapes ("" -> "). */
+static QStringList parseCsvLine(const QString &line)
+{
+	QStringList fields;
+	QString field;
+	bool inQuotes = false;
+	for (int i = 0; i < line.size(); ++i) {
+		QChar c = line[i];
+		if (inQuotes) {
+			if (c == '"') {
+				if (i + 1 < line.size()
+				    && line[i + 1] == '"') {
+					field += '"';
+					++i;
+				}
+				else
+					inQuotes = false;
+			}
+			else
+				field += c;
+		}
+		else {
+			if (c == '"')
+				inQuotes = true;
+			else if (c == ',') {
+				fields.append(field);
+				field.clear();
+			}
+			else
+				field += c;
+		}
+	}
+	fields.append(field);
+	return fields;
 }
 
 /** Host part of a sip URI ("sip:u@host:port;p" -> "host:port"). */
@@ -1113,7 +1151,8 @@ void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
 
 
 void CallDialog::confirmOverlay(const QString &text,
-				std::function<void()> onYes)
+				std::function<void()> onYes,
+				const QString &noText)
 {
 	if (deleteOverlay_)
 		deleteOverlay_->deleteLater();
@@ -1164,7 +1203,7 @@ void CallDialog::confirmOverlay(const QString &text,
 		"             border: none; border-radius: 4px;"
 		"             padding: 6px 20px; font-weight: bold; }"
 		"QPushButton:hover { background-color: #b71c1c; }");
-	auto *noBtn = new QPushButton("No", deleteOverlay_);
+	auto *noBtn = new QPushButton(noText, deleteOverlay_);
 	noBtn->setStyleSheet(
 		"QPushButton { background-color: #424242; color: white;"
 		"             border: none; border-radius: 4px;"
@@ -1195,6 +1234,243 @@ void CallDialog::confirmOverlay(const QString &text,
 }
 
 
+void CallDialog::showImportInstructions()
+{
+	if (importOverlay_)
+		importOverlay_->deleteLater();
+
+	importOverlay_ = new QFrame(panel_);
+	{
+		QColor bg = palette().color(QPalette::Window);
+		importOverlay_->setStyleSheet(QString(
+			"QFrame { background-color: rgba(%1,%2,%3,230);"
+			"         border: 1px solid #808080;"
+			"         border-radius: 8px; }"
+			"QLabel { border: none; color: palette(text); }")
+			.arg(bg.red()).arg(bg.green()).arg(bg.blue()));
+	}
+
+	/* Cover 90% of the panel — 5% margin all sides. */
+	int mw = panel_->width() / 20;
+	int mh = panel_->height() / 20;
+	importOverlay_->setGeometry(mw, mh,
+		panel_->width() - 2 * mw,
+		panel_->height() - 2 * mh);
+
+	auto *lay = new QVBoxLayout(importOverlay_);
+	lay->setSpacing(8);
+
+	auto *title = new QLabel("Note: CSV columns are imported as follows.",
+				 importOverlay_);
+	title->setStyleSheet("font-weight: bold; font-size: 16px;"
+			     " border: none;");
+	title->setWordWrap(true);
+	title->setAlignment(Qt::AlignLeft);
+	lay->addWidget(title);
+
+	auto *note = new QLabel(
+		"<ol style=\"margin-left: 5px;\">"
+		"<li>Multiple Name columns are concatenated to a single "
+		"Name column.</li>"
+		"<li>Multiple Phone columns Home Phone, Mobile Phone, "
+		"Business Phone, SIP Phone etc create multiple records "
+		"with Home, Mobile, Business, SIP as type.</li>"
+		"<li>The number or URI is imported as is.</li>"
+		"<li>All other columns are ignored.</li>"
+		"</ol>",
+		importOverlay_);
+	note->setStyleSheet("border: none; font-size: 17px;");
+	note->setWordWrap(true);
+	lay->addWidget(note, 1);
+
+	auto *btnRow = new QHBoxLayout();
+	btnRow->setAlignment(Qt::AlignCenter);
+	btnRow->setSpacing(20);
+
+	auto *importBtn = new QPushButton("Import", importOverlay_);
+	importBtn->setStyleSheet(
+		"QPushButton { background-color: #2e7d32; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #1b5e20; }");
+	auto *cancelBtn = new QPushButton("Cancel", importOverlay_);
+	cancelBtn->setStyleSheet(
+		"QPushButton { background-color: #424242; color: white;"
+		"             border: none; border-radius: 4px;"
+		"             padding: 6px 20px; font-weight: bold; }"
+		"QPushButton:hover { background-color: #616161; }");
+	btnRow->addWidget(importBtn);
+	btnRow->addWidget(cancelBtn);
+	lay->addLayout(btnRow);
+
+	importOverlay_->show();
+	importOverlay_->raise();
+
+	connect(importBtn, &QPushButton::clicked, this, [this]() {
+		/* Keep the import overlay visible while the file browser
+		 * is open so the dial panel doesn't lose focus and hide.
+		 * The panel is re-shown after the dialog closes. */
+		QString path = QFileDialog::getOpenFileName(
+			this, "Import Contacts CSV", QString(),
+			"CSV Files (*.csv)");
+		if (importOverlay_) {
+			importOverlay_->deleteLater();
+			importOverlay_ = nullptr;
+		}
+		if (path.isEmpty())
+			return;
+		/* Re-show the panel in case it was hidden by the
+		 * file dialog grabbing focus. */
+		show();
+		raise();
+		activateWindow();
+		importCsv(path);
+	});
+	connect(cancelBtn, &QPushButton::clicked, this, [this]() {
+		if (importOverlay_)
+			importOverlay_->deleteLater();
+		importOverlay_ = nullptr;
+	});
+}
+
+
+void CallDialog::importCsv(const QString &path)
+{
+	/* Parse the CSV file: header row identifies name/phone columns.
+	 * Each data row's name columns are concatenated; each populated
+	 * phone column becomes a separate ContactEntry with the column
+	 * title (minus "phone") as the type. */
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		QMessageBox::warning(this, "Import failed",
+			"Could not open the CSV file.");
+		return;
+	}
+
+	QTextStream in(&f);
+	QString headerLine = in.readLine();
+	if (headerLine.isNull()) {
+		QMessageBox::warning(this, "Import failed",
+			"The CSV file is empty.");
+		return;
+	}
+
+	QStringList headers = parseCsvLine(headerLine);
+
+	/* Identify name columns (header contains "name") and phone
+	 * columns (header contains "phone"). The type is the phone
+	 * column title with "phone" removed. */
+	QList<int> nameCols, phoneCols;
+	QStringList phoneTypes;
+	for (int i = 0; i < headers.size(); ++i) {
+		QString h = headers[i].toLower();
+		if (h.contains("name"))
+			nameCols.append(i);
+		if (h.contains("phone")) {
+			phoneCols.append(i);
+			QString type = headers[i];
+			type.remove("phone", Qt::CaseInsensitive);
+			type = type.trimmed();
+			phoneTypes.append(type);
+		}
+	}
+
+	if (phoneCols.isEmpty()) {
+		QMessageBox::warning(this, "Import failed",
+			"No phone columns found in the CSV header.");
+		return;
+	}
+
+	/* Parse data rows and build imported records. */
+	QList<ContactEntry> imported;
+	QSet<QString> uniqueNames;
+	while (!in.atEnd()) {
+		QString line = in.readLine();
+		if (line.trimmed().isEmpty())
+			continue;
+		QStringList fields = parseCsvLine(line);
+
+		/* Concatenate all name column values into one Name. */
+		QString name;
+		for (int col : nameCols) {
+			if (col < fields.size()) {
+				QString part = fields[col].trimmed();
+				if (!part.isEmpty()) {
+					if (!name.isEmpty())
+						name += " ";
+					name += part;
+				}
+			}
+		}
+		if (name.isEmpty())
+			continue;
+
+		/* Each populated phone column → one record. Skip
+		 * the row entirely if no phone column is populated. */
+		bool anyPhone = false;
+		for (int i = 0; i < phoneCols.size(); ++i) {
+			int col = phoneCols[i];
+			if (col >= fields.size())
+				continue;
+			QString number = fields[col].trimmed();
+			if (number.isEmpty())
+				continue;
+			anyPhone = true;
+
+			ContactEntry e;
+			e.name = name;
+			e.type = phoneTypes[i].isEmpty()
+				? "Primary" : phoneTypes[i];
+			/* If the number is already a sip: URI, use it
+			 * directly; otherwise complete it via the
+			 * current account's domain. */
+			if (isUriInput(number))
+				e.uri = uriToFull(
+					number.toUtf8().constData());
+			else
+				e.uri = completeUri(number, QString());
+			imported.append(e);
+		}
+		if (anyPhone)
+			uniqueNames.insert(name);
+	}
+
+	if (imported.isEmpty()) {
+		QMessageBox::information(this, "Import",
+			"No phone records found in the CSV file.");
+		return;
+	}
+
+	/* Show the confirmation overlay. On Yes, merge imported
+	 * records with existing contacts, sort by name then type,
+	 * and write the contacts file. */
+	QString msg = QString("%1 phone records found for %2 names. "
+			      "Add to Contacts?")
+		.arg(imported.size()).arg(uniqueNames.size());
+
+	confirmOverlay(msg, [this, imported]() {
+		/* Merge: append imported records to existing. */
+		for (const ContactEntry &e : imported)
+			contactEntries_.append(e);
+
+		/* Sort by name, then by type. */
+		std::sort(contactEntries_.begin(),
+			  contactEntries_.end(),
+			  [](const ContactEntry &a, const ContactEntry &b) {
+			int c = a.name.compare(b.name,
+					       Qt::CaseInsensitive);
+			if (c != 0)
+				return c < 0;
+			return a.type.compare(b.type,
+					      Qt::CaseInsensitive) < 0;
+		});
+
+		saveContactsFile();
+		refreshContacts();
+	}, "Cancel");
+}
+
+
 void CallDialog::resizeEvent(QResizeEvent *ev)
 {
 	QDialog::resizeEvent(ev);
@@ -1215,6 +1491,13 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 			panel_->width() - 2 * mw,
 			panel_->height() - 2 * mh);
 	}
+	if (importOverlay_) {
+		int mw = panel_->width() / 20;
+		int mh = panel_->height() / 20;
+		importOverlay_->setGeometry(mw, mh,
+			panel_->width() - 2 * mw,
+			panel_->height() - 2 * mh);
+	}
 }
 
 
@@ -1230,6 +1513,10 @@ void CallDialog::hideEvent(QHideEvent *ev)
 		pendingDelete_ = nullptr;
 		deleteOverlay_->deleteLater();
 		deleteOverlay_ = nullptr;
+	}
+	if (importOverlay_) {
+		importOverlay_->deleteLater();
+		importOverlay_ = nullptr;
 	}
 	QDialog::hideEvent(ev);
 }

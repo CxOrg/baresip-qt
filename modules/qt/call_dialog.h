@@ -60,6 +60,16 @@ public:
 	 *  button text. */
 	void showContacts(bool contacts);
 
+	/** Import contacts from a CSV file. Parses name/phone columns,
+	 *  builds records, shows a confirmation overlay, and on Yes
+	 *  merges with existing contacts, sorts, and saves. */
+	void importCsv(const QString &path);
+
+	/** Show the CSV import instructions overlay with Import and
+	 *  Cancel buttons. Import opens the file browser; Cancel
+	 *  closes the overlay. */
+	void showImportInstructions();
+
 	/** Populate the dial entry with a number (Dialing state).
 	 *  The call is NOT placed until the green button is clicked. */
 	void setDialNumber(const QString &number);
@@ -150,9 +160,11 @@ private:
 	void saveContactsFile();
 
 	/** Delete-confirmation overlay (same style as the settings
-	 *  account-removal overlay); runs `onYes` on Yes. */
+	 *  account-removal overlay); runs `onYes` on Yes.
+	 *  `noText` overrides the "No" button label (e.g. "Cancel"). */
 	void confirmOverlay(const QString &text,
-			    std::function<void()> onYes);
+			    std::function<void()> onYes,
+			    const QString &noText = "No");
 
 	State state_;
 	quintptr callPtr_ = 0;
@@ -176,6 +188,7 @@ private:
 	/* Contact add/edit overlay form + delete-confirm overlay. */
 	QFrame    *formOverlay_   = nullptr;
 	QFrame    *deleteOverlay_ = nullptr;
+	QFrame    *importOverlay_ = nullptr;
 	QLineEdit *cNameEdit_     = nullptr;
 	QLineEdit *cNumEdit_      = nullptr;
 	QComboBox *cTypeEdit_     = nullptr;

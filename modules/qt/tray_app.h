@@ -55,6 +55,7 @@ private slots:
 	void onDial();
 	void onAbout();
 	void onSettings();
+	void onImportCsv();
 	void onQuit();
 	void onAccountToggled(QAction *action);
 	void onPresenceToggled();

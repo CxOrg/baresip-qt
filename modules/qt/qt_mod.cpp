@@ -740,8 +740,15 @@ static int qt_thread(void *arg)
 	 * can't load its platform plugin when QApplication runs on a
 	 * non-main thread — it falls back to a no-op implementation,
 	 * but logs a warning on every panel show. Suppress that
-	 * category to keep the console clean. */
-	QLoggingCategory::setFilterRules("kf.windowsystem=false");
+	 * category to keep the console clean.
+	 *
+	 * Also suppress kf.kio.widgets.kdirmodel — a known KF6/KIO
+	 * race-condition bug in KDirModel that spams "No node found
+	 * for item that was just removed" when QFileDialog populates
+	 * its file listing under KDE Plasma. */
+	QLoggingCategory::setFilterRules(
+		"kf.windowsystem=false\n"
+		"kf.kio.widgets.kdirmodel=false");
 
 #ifdef HAVE_KSTYLE
 	/* Apply the user's configured KDE widget style (Breeze by default)

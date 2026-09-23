@@ -159,6 +159,10 @@ void TrayApp::buildMenu()
 	QAction *settingsAct = menu_->addAction("Settings ...");
 	connect(settingsAct, &QAction::triggered, this, &TrayApp::onSettings);
 
+	/* Import contacts from a CSV file. */
+	QAction *importAct = menu_->addAction("Import CSV ...");
+	connect(importAct, &QAction::triggered, this, &TrayApp::onImportCsv);
+
 	QAction *aboutAct = menu_->addAction("About ...");
 	connect(aboutAct, &QAction::triggered, this, &TrayApp::onAbout);
 
@@ -372,6 +376,19 @@ void TrayApp::openDialNumber(QString number)
 	onDial();
 	if (idleCallDialog_ && !number.isEmpty())
 		idleCallDialog_->setDialNumber(number);
+}
+
+
+void TrayApp::onImportCsv()
+{
+	/* Open the dial panel and switch to the contacts view, then
+	 * show the import instructions overlay — the file browser is
+	 * opened from the overlay's Import button. */
+	onDial();
+	if (idleCallDialog_) {
+		idleCallDialog_->showContacts(true);
+		idleCallDialog_->showImportInstructions();
+	}
 }
 
 
