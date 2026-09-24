@@ -43,7 +43,7 @@ public slots:
 	void callEstablished(quintptr callPtr);
 	void addHistory(QString number, QString uri, int callType,
 			QString info);
-	void updateHistoryDuration(QString uri, uint duration);
+	void updateHistoryDuration(QString uri, uint duration, int callType);
 	void showWarning(QString title, QString text);
 	/* Opens the dial panel with a number pre-filled (tel: links via
 	 * the "qtdial" command). Runs on the Qt thread. */

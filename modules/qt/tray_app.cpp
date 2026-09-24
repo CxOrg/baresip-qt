@@ -650,9 +650,10 @@ void TrayApp::addHistory(QString number, QString uri, int callType,
 }
 
 
-void TrayApp::updateHistoryDuration(QString uri, uint duration)
+void TrayApp::updateHistoryDuration(QString uri, uint duration,
+				    int callType)
 {
-	CallHistory::instance()->updateDuration(uri, duration);
+	CallHistory::instance()->updateDuration(uri, duration, callType);
 	if (idleCallDialog_)
 		idleCallDialog_->refreshHistory();
 }

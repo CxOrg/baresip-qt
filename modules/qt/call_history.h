@@ -39,8 +39,9 @@ public:
 		 const QString &info);
 
 	/** Update the duration of the most recent entry matching `uri`
-	 *  (falls back to matching the number column). */
-	void updateDuration(const QString &uri, uint32_t duration);
+	 *  and `callType` (falls back to matching the number column). */
+	void updateDuration(const QString &uri, uint32_t duration,
+			    int callType);
 
 	/** Remove the entry matching ts+number+uri; saves and emits
 	 *  changed(). Returns false if no entry matched. */

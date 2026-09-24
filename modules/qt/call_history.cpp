@@ -147,19 +147,21 @@ void CallHistory::add(const QString &number, const QString &uri,
 		      int type, const QString &info)
 {
 	/* If an existing record matches this peer (same number, or
-	 * same uri when no number), increment its count and update
-	 * the timestamp. This collapses repeat calls to the same
-	 * peer into one history entry. */
+	 * same uri when no number) AND the same call direction
+	 * (incoming/outgoing), increment its count and update the
+	 * timestamp. This keeps incoming and outgoing calls to the
+	 * same peer as separate history entries. */
 	for (int i = entries_.size() - 1; i >= 0; --i) {
 		CallHistoryEntry &e = entries_[i];
 		bool match = false;
+		if (e.type != type)
+			continue;
 		if (!number.isEmpty())
 			match = (e.number == number);
 		else if (!uri.isEmpty())
 			match = (e.uri == uri || e.number.isEmpty());
 		if (match) {
 			e.ts = QDateTime::currentDateTime();
-			e.type = type;
 			e.count++;
 			e.duration = 0;
 			/* Update uri so updateDuration() can find this
@@ -195,13 +197,15 @@ void CallHistory::add(const QString &number, const QString &uri,
 }
 
 
-void CallHistory::updateDuration(const QString &uri, uint32_t duration)
+void CallHistory::updateDuration(const QString &uri, uint32_t duration,
+				int callType)
 {
-	/* Find the most recent entry matching this peer and update
-	 * its duration. Entries written before the uri column existed
-	 * match on the number instead. Searches backwards. */
+	/* Find the most recent entry matching this peer and call
+	 * direction, and update its duration. Searches backwards. */
 	QString num = uriToNumber(uri.toUtf8().constData());
 	for (int i = entries_.size() - 1; i >= 0; --i) {
+		if (entries_[i].type != callType)
+			continue;
 		if (entries_[i].uri == uri ||
 		    (entries_[i].uri.isEmpty() &&
 		     entries_[i].number == num)) {
