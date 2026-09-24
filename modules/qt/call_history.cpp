@@ -44,8 +44,23 @@ void CallHistory::load()
 	entries_.clear();
 
 	QFile f(filePath());
-	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		/* First install: create a template with dummy
+		 * entries so the history list isn't empty. */
+		QDir().mkpath(QFileInfo(filePath()).absolutePath());
+		QFile tf(filePath());
+		if (tf.open(QIODevice::WriteOnly | QIODevice::Text)) {
+			QTextStream out(&tf);
+			out << "2026-01-01T10:00:00,0,1234567890,,0,"
+			    "sip:1234567890@example.com,1\n"
+			    "2026-01-01T11:00:00,1,9876543210,,0,"
+			    "sip:9876543210@example.com,1\n"
+			    "2026-01-01T12:00:00,0,,sip:mobile@example.com,0,"
+			    "sip:mobile@example.com,1\n";
+			tf.close();
+		}
 		return;
+	}
 
 	QTextStream in(&f);
 	while (!in.atEnd()) {
