@@ -16,8 +16,9 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include <QListWidget>
-#include <QListWidgetItem>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QHeaderView>
 #include <QMessageBox>
 #include <QPalette>
 #include <QIcon>
@@ -408,20 +409,13 @@ void CallDialog::positionNearTray()
 
 void CallDialog::fitWidthToHistory()
 {
-	/* Widen the dialog to fit the longest history entry without
-	 * text wrap or ellipsis. Measure the text width with the
-	 * list widget's actual font. */
-	if (!historyList_ || historyList_->count() == 0)
+	/* Widen the dialog to fit the table contents. */
+	if (!historyList_ || historyList_->rowCount() == 0)
 		return;
 
 	int maxWidth = 0;
-	QFontMetrics fm(historyList_->font());
-	for (int i = 0; i < historyList_->count(); ++i) {
-		QListWidgetItem *it = historyList_->item(i);
-		int iconWidth = it->icon().isNull() ? 0 : 24;
-		maxWidth = std::max(maxWidth,
-			fm.horizontalAdvance(it->text()) + iconWidth + 20);
-	}
+	for (int i = 0; i < historyList_->columnCount(); ++i)
+		maxWidth += historyList_->columnWidth(i);
 
 	/* Add space for the vertical scrollbar and frame margins. */
 	maxWidth += style()->pixelMetric(QStyle::PM_ScrollBarExtent) + 8;
@@ -527,19 +521,28 @@ void CallDialog::buildUi()
 	layout->addWidget(dialpadWidget_);
 
 	/* Call history list (shown only in Dialing state). */
-	historyList_ = new QListWidget(panel);
+	historyList_ = new QTableWidget(panel);
 	historyList_->setMaximumHeight(200);
 	historyList_->setMinimumHeight(60);
-	historyList_->setUniformItemSizes(true);
-	/* Disable horizontal scrollbar — the dialog widens to fit the
-	 * widest entry instead (see refreshHistory/adjustSize). */
+	historyList_->setShowGrid(false);
+	historyList_->setSelectionBehavior(
+		QAbstractItemView::SelectRows);
+	historyList_->setSelectionMode(
+		QAbstractItemView::SingleSelection);
+	historyList_->setVerticalScrollMode(
+		QAbstractItemView::ScrollPerPixel);
+	historyList_->verticalHeader()->setVisible(false);
 	historyList_->setHorizontalScrollBarPolicy(
 		Qt::ScrollBarAlwaysOff);
-	historyList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	historyList_->setVerticalScrollBarPolicy(
+		Qt::ScrollBarAsNeeded);
+	/* Disable horizontal scrollbar — the dialog widens to fit. */
+	historyList_->setHorizontalScrollBarPolicy(
+		Qt::ScrollBarAlwaysOff);
 	layout->addWidget(historyList_);
-	connect(historyList_, &QListWidget::itemClicked,
+	connect(historyList_, &QTableWidget::itemClicked,
 		this, &CallDialog::onHistoryClicked);
-	connect(historyList_, &QListWidget::itemDoubleClicked,
+	connect(historyList_, &QTableWidget::itemDoubleClicked,
 		this, &CallDialog::onHistoryDoubleClicked);
 
 	/* Button row: green on the left, red on the right. */
@@ -764,11 +767,22 @@ void CallDialog::refreshHistory()
 		return;
 
 	historyList_->clear();
+	historyList_->setColumnCount(6);
+	historyList_->setHorizontalHeaderLabels(
+		{"", "Number", "Count", "Duration", "Date/Time", ""});
+	historyList_->setColumnWidth(0, 28);  /* icon */
+	historyList_->setColumnWidth(2, 50);  /* count */
+	historyList_->setColumnWidth(3, 60);  /* duration */
+	historyList_->setColumnWidth(4, 90);  /* date/time */
+	historyList_->setColumnWidth(5, 50);  /* actions */
+	historyList_->horizontalHeader()->setSectionResizeMode(
+		1, QHeaderView::Stretch);
 
 	/* Most recent first; show up to 10 entries. */
 	auto entries = CallHistory::instance()->recent(10);
 	/* Display newest at top. */
-	for (int i = entries.size() - 1; i >= 0; --i) {
+	int row = 0;
+	for (int i = entries.size() - 1; i >= 0; --i, ++row) {
 		const CallHistoryEntry &e = entries[i];
 
 		QString iconName, fallback;
@@ -793,74 +807,90 @@ void CallDialog::refreshHistory()
 		/* Display/dial target: the number when the peer has a
 		 * dialable number, else the full SIP URI. */
 		QString target = e.target();
+		QString display = e.info.isEmpty() ? target : e.info;
 
-		/* Format: "count  target  date time" — count shown
-		 * in parentheses when > 1. */
 		QString countStr = e.count > 1
-			? QString("(%1x)  ").arg(e.count) : QString();
-		QString label;
+			? QString("%1x").arg(e.count) : QString();
+		QString durStr;
 		if (e.duration > 0) {
-			/* Format duration as M:SS */
 			int mins = e.duration / 60;
 			int secs = e.duration % 60;
-			QString dur = QString("%1:%2")
+			durStr = QString("%1:%2")
 				.arg(mins)
 				.arg(secs, 2, 10, QChar('0'));
-			label = e.info.isEmpty()
-				? QString("%1%2  (%3)  %4").arg(countStr,
-					target, dur,
-					e.ts.toString("MM-dd hh:mm"))
-				: QString("%1%2  (%3)  %4").arg(countStr,
-					e.info, dur,
-					e.ts.toString("MM-dd hh:mm"));
-		} else {
-			label = e.info.isEmpty()
-				? QString("%1%2  %3").arg(countStr, target,
-					e.ts.toString("MM-dd hh:mm"))
-				: QString("%1%2  %3").arg(countStr, e.info,
-					e.ts.toString("MM-dd hh:mm"));
 		}
+		QString dateStr = e.ts.toString("MM-dd hh:mm");
 
-		auto *item = new QListWidgetItem();
-		/* Stash the target for click-to-fill — a bare number is
-		 * completed with the account domain on dialing, a full
-		 * sip: URI is dialed directly. The remaining roles feed
-		 * the row's add-contact/delete buttons. */
-		item->setData(Qt::UserRole,     target);
-		item->setData(Qt::UserRole + 1, e.ts);
-		item->setData(Qt::UserRole + 2, e.number);
-		item->setData(Qt::UserRole + 3, e.uri);
-		item->setData(Qt::UserRole + 4, e.info);
-		historyList_->addItem(item);
+		historyList_->insertRow(row);
 
+		/* Icon column */
+		auto *iconItem = new QTableWidgetItem();
 		QIcon ic = QIcon::fromTheme(iconName);
 		if (ic.isNull() && !fallback.isEmpty())
 			ic = QIcon::fromTheme(fallback);
-		QWidget *row = makeRow(label, ic, item);
-		item->setSizeHint(row->sizeHint());
-		historyList_->setItemWidget(item, row);
+		iconItem->setIcon(ic);
+		historyList_->setItem(row, 0, iconItem);
+
+		/* Number column — stash target in UserRole for
+		 * click-to-fill. */
+		auto *numItem = new QTableWidgetItem(display);
+		numItem->setData(Qt::UserRole,     target);
+		numItem->setData(Qt::UserRole + 1, e.ts);
+		numItem->setData(Qt::UserRole + 2, e.number);
+		numItem->setData(Qt::UserRole + 3, e.uri);
+		numItem->setData(Qt::UserRole + 4, e.info);
+		numItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+		historyList_->setItem(row, 1, numItem);
+
+		/* Count column */
+		auto *cntItem = new QTableWidgetItem(countStr);
+		cntItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 2, cntItem);
+
+		/* Duration column */
+		auto *durItem = new QTableWidgetItem(durStr);
+		durItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 3, durItem);
+
+		/* Date/Time column */
+		auto *dateItem = new QTableWidgetItem(dateStr);
+		dateItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 4, dateItem);
+
+		/* Actions column */
+		historyList_->setCellWidget(row, 5,
+			makeActionWidget(row, false));
 	}
 }
 
 
-void CallDialog::onHistoryClicked(QListWidgetItem *item)
+void CallDialog::onHistoryClicked(QTableWidgetItem *item)
 {
 	if (!item)
 		return;
-	QString uri = item->data(Qt::UserRole).toString();
-	if (!uri.isEmpty())
-		uriEdit_->setText(uri);
+	/* The target is stashed on the Number column (col 1). */
+	int row = item->row();
+	auto *numItem = historyList_->item(row, 1);
+	if (!numItem)
+		return;
+	QString target = numItem->data(Qt::UserRole).toString();
+	if (!target.isEmpty())
+		uriEdit_->setText(target);
 }
 
 
-void CallDialog::onHistoryDoubleClicked(QListWidgetItem *item)
+void CallDialog::onHistoryDoubleClicked(QTableWidgetItem *item)
 {
 	if (!item)
 		return;
-	QString uri = item->data(Qt::UserRole).toString();
-	if (uri.isEmpty())
+	int row = item->row();
+	auto *numItem = historyList_->item(row, 1);
+	if (!numItem)
 		return;
-	uriEdit_->setText(uri);
+	QString target = numItem->data(Qt::UserRole).toString();
+	if (target.isEmpty())
+		return;
+	uriEdit_->setText(target);
 	/* Double-click = dial immediately. */
 	onGreen();
 }
@@ -890,35 +920,41 @@ void CallDialog::refreshContacts()
 		return;
 
 	historyList_->clear();
+	historyList_->setColumnCount(4);
+	historyList_->setHorizontalHeaderLabels(
+		{"Name", "Type", "Number/URI", ""});
+	historyList_->setColumnWidth(1, 70);  /* type */
+	historyList_->setColumnWidth(3, 50);  /* actions */
+	historyList_->horizontalHeader()->setSectionResizeMode(
+		0, QHeaderView::Stretch);
+	historyList_->horizontalHeader()->setSectionResizeMode(
+		2, QHeaderView::Stretch);
+
 	loadContactsFile();
 
-	/* Same format as the tray "Call Contact" menu: "Name  target",
-	 * where target is the bare number for dialable contacts or the
-	 * full sip: URI for foreign addresses. */
 	for (int i = 0; i < contactEntries_.size(); ++i) {
 		const ContactEntry &e = contactEntries_[i];
 		QString target = uriToTarget(e.uri.toUtf8().constData());
-		/* "Name  [Type]  number" — type shown in brackets
-		 * when present. */
-		QString label;
-		if (e.name.isEmpty() && e.type.isEmpty())
-			label = target;
-		else if (e.name.isEmpty())
-			label = QString("[%1]  %2").arg(e.type, target);
-		else if (e.type.isEmpty())
-			label = QString("%1  %2").arg(e.name, target);
-		else
-			label = QString("%1  [%2]  %3")
-				.arg(e.name, e.type, target);
 
-		auto *item = new QListWidgetItem();
-		item->setData(Qt::UserRole, target);
-		item->setData(Qt::UserRole + 1, i); /* entries_ index */
-		historyList_->addItem(item);
+		int row = i;
+		historyList_->insertRow(row);
 
-		QWidget *row = makeRow(label, QIcon(), item);
-		item->setSizeHint(row->sizeHint());
-		historyList_->setItemWidget(item, row);
+		auto *nameItem = new QTableWidgetItem(e.name);
+		nameItem->setData(Qt::UserRole, target);
+		nameItem->setData(Qt::UserRole + 1, i);
+		nameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+		historyList_->setItem(row, 0, nameItem);
+
+		auto *typeItem = new QTableWidgetItem(e.type);
+		typeItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 1, typeItem);
+
+		auto *numItem = new QTableWidgetItem(target);
+		numItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+		historyList_->setItem(row, 2, numItem);
+
+		historyList_->setCellWidget(row, 3,
+			makeActionWidget(row, true));
 	}
 }
 
@@ -943,39 +979,29 @@ static QToolButton *rowButton(const QString &iconName,
 }
 
 
-QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
-			     QListWidgetItem *item)
+QWidget *CallDialog::makeActionWidget(int row, bool isContact)
 {
-	auto *row = new QWidget(historyList_);
-	auto *l = new QHBoxLayout(row);
-	l->setContentsMargins(4, 0, 2, 0);
-	l->setSpacing(4);
+	auto *w = new QWidget(historyList_);
+	auto *l = new QHBoxLayout(w);
+	l->setContentsMargins(2, 0, 2, 0);
+	l->setSpacing(2);
 
-	if (!icon.isNull()) {
-		auto *ic = new QLabel(row);
-		ic->setPixmap(icon.pixmap(16, 16));
-		ic->setAttribute(Qt::WA_TransparentForMouseEvents);
-		l->addWidget(ic);
-	}
-
-	/* The label is transparent to mouse events so clicks on the
-	 * text still reach the list item (click-to-fill and
-	 * double-click-to-dial keep working). */
-	auto *text = new QLabel(label, row);
-	text->setAttribute(Qt::WA_TransparentForMouseEvents);
-	l->addWidget(text, 1);
-
-	if (showingContacts_) {
-		QToolButton *edit = rowButton("document-edit", "\u270E", row);
-		QToolButton *del  = rowButton("edit-delete", "\u2715", row);
+	if (isContact) {
+		QToolButton *edit = rowButton("document-edit", "\u270E", w);
+		QToolButton *del  = rowButton("edit-delete", "\u2715", w);
 		l->addWidget(edit);
 		l->addWidget(del);
 
-		connect(edit, &QToolButton::clicked, this, [this, item]() {
-			openContactForm(item->data(Qt::UserRole + 1)
-					.toInt());
+		connect(edit, &QToolButton::clicked, this, [this, row]() {
+			auto *item = historyList_->item(row, 0);
+			if (item)
+				openContactForm(item->data(Qt::UserRole + 1)
+						.toInt());
 		});
-		connect(del, &QToolButton::clicked, this, [this, item]() {
+		connect(del, &QToolButton::clicked, this, [this, row]() {
+			auto *item = historyList_->item(row, 0);
+			if (!item)
+				return;
 			int idx = item->data(Qt::UserRole + 1).toInt();
 			if (idx < 0 || idx >= contactEntries_.size())
 				return;
@@ -993,15 +1019,19 @@ QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
 		});
 	}
 	else {
-		QToolButton *add = rowButton("list-add", "+", row);
-		QToolButton *del = rowButton("edit-delete", "\u2715", row);
+		QToolButton *add = rowButton("list-add", "+", w);
+		QToolButton *del = rowButton("edit-delete", "\u2715", w);
 		l->addWidget(add);
 		l->addWidget(del);
 
-		connect(add, &QToolButton::clicked, this, [this, item]() {
+		connect(add, &QToolButton::clicked, this, [this, row]() {
+			auto *item = historyList_->item(row, 1);
 			openContactForm(-1, item);
 		});
-		connect(del, &QToolButton::clicked, this, [this, item]() {
+		connect(del, &QToolButton::clicked, this, [this, row]() {
+			auto *item = historyList_->item(row, 1);
+			if (!item)
+				return;
 			QDateTime ts = item->data(Qt::UserRole + 1)
 				.toDateTime();
 			QString num = item->data(Qt::UserRole + 2)
@@ -1021,7 +1051,7 @@ QWidget *CallDialog::makeRow(const QString &label, const QIcon &icon,
 		});
 	}
 
-	return row;
+	return w;
 }
 
 
@@ -1081,7 +1111,7 @@ void CallDialog::saveContactsFile()
 }
 
 
-void CallDialog::openContactForm(int index, QListWidgetItem *prefill)
+void CallDialog::openContactForm(int index, QTableWidgetItem *prefill)
 {
 	if (formOverlay_)
 		formOverlay_->deleteLater();

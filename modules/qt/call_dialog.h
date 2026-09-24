@@ -24,8 +24,8 @@
 
 class QLineEdit;
 class QPushButton;
-class QListWidget;
-class QListWidgetItem;
+class QTableWidget;
+class QTableWidgetItem;
 class QSystemTrayIcon;
 class QFrame;
 class QIcon;
@@ -145,15 +145,14 @@ private:
 	void refreshContacts();
 	void buildDialpad(QWidget *parent);
 
-	/** Row widget for a list item: a click-through label plus
-	 *  action buttons at the right end (add/edit/delete). */
-	QWidget *makeRow(const QString &label, const QIcon &icon,
-			 QListWidgetItem *item);
+	/** Row widget for action buttons (add/edit/delete) placed
+	 *  in the last column of the table. */
+	QWidget *makeActionWidget(int row, bool isContact);
 
 	/** Contact add/edit overlay form. index >= 0 edits
 	 *  contactEntries_[index]; index < 0 adds a new contact,
 	 *  optionally prefilled from a history item's stored data. */
-	void openContactForm(int index, QListWidgetItem *prefill = nullptr);
+	void openContactForm(int index, QTableWidgetItem *prefill = nullptr);
 	void loadContactsFile();
 	void saveContactsFile();
 
@@ -182,7 +181,7 @@ private:
 	QLineEdit    *dialpadLog_    = nullptr;
 	QPushButton  *listToggleBtn_ = nullptr;
 	QTabBar      *listTabs_     = nullptr;
-	QListWidget  *historyList_ = nullptr;
+	QTableWidget *historyList_ = nullptr;
 
 	/* Contact add/edit overlay form + delete-confirm overlay. */
 	QFrame    *formOverlay_   = nullptr;
@@ -200,6 +199,6 @@ private slots:
 	void onGreen();
 	void onRed();
 	void sendDigit(char key);
-	void onHistoryClicked(QListWidgetItem *item);
-	void onHistoryDoubleClicked(QListWidgetItem *item);
+	void onHistoryClicked(QTableWidgetItem *item);
+	void onHistoryDoubleClicked(QTableWidgetItem *item);
 };
