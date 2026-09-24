@@ -78,12 +78,17 @@ void CallHistory::load()
 		e.number = parts[2];
 		e.info = parts[3];
 
-		/* Tail after the 4th comma: "duration[,uri]" — the uri
-		 * column was appended later and is absent in old files. */
+		/* Tail after the 4th comma: "duration[,uri[,count]]" —
+		 * the uri column was appended later, and count after
+		 * that. Both are absent in files from older versions. */
 		QString tail = parts.size() > 4 ? parts[4] : QString();
-		int c = tail.indexOf(',');
-		e.duration = (c < 0 ? tail : tail.left(c)).toUInt();
-		e.uri = c < 0 ? QString() : tail.mid(c + 1);
+		QStringList tailParts = tail.split(',');
+		e.duration = tailParts.size() > 0
+			? tailParts[0].toUInt() : 0;
+		e.uri = tailParts.size() > 1
+			? tailParts[1] : QString();
+		e.count = tailParts.size() > 2
+			? tailParts[2].toInt() : 1;
 
 		/* Unescape commas in info. */
 		e.info.replace("\\,", ",");
@@ -112,8 +117,8 @@ void CallHistory::save() const
 		    << e.number << ","
 		    << info << ","
 		    << e.duration;
-		if (!e.uri.isEmpty())
-			out << "," << e.uri;
+		if (!e.uri.isEmpty() || e.count > 1)
+			out << "," << e.uri << "," << e.count;
 		out << "\n";
 	}
 
@@ -125,6 +130,28 @@ void CallHistory::save() const
 void CallHistory::add(const QString &number, const QString &uri,
 		      int type, const QString &info)
 {
+	/* If an existing record matches this peer (same number, or
+	 * same uri when no number), increment its count and update
+	 * the timestamp. This collapses repeat calls to the same
+	 * peer into one history entry. */
+	for (int i = entries_.size() - 1; i >= 0; --i) {
+		CallHistoryEntry &e = entries_[i];
+		bool match = false;
+		if (!number.isEmpty())
+			match = (e.number == number);
+		else if (!uri.isEmpty())
+			match = (e.uri == uri || e.number.isEmpty());
+		if (match) {
+			e.ts = QDateTime::currentDateTime();
+			e.type = type;
+			e.count++;
+			e.duration = 0;
+			save();
+			emit changed();
+			return;
+		}
+	}
+
 	CallHistoryEntry e;
 	e.ts   = QDateTime::currentDateTime();
 	e.type = type;
@@ -132,6 +159,7 @@ void CallHistory::add(const QString &number, const QString &uri,
 	e.uri  = uri;
 	e.info = info;
 	e.duration = 0;
+	e.count = 1;
 
 	entries_.append(e);
 

@@ -22,6 +22,7 @@ struct CallHistoryEntry {
 	QString   uri;    /* full "sip:user@host" peer URI, may be empty */
 	QString   info;   /* peer display name, may be empty */
 	uint32_t  duration = 0;  /* call duration in seconds (0 if not connected) */
+	int       count = 1;     /* number of calls to this peer (in/out) */
 
 	/** What the user sees/dials: the number if present, else URI. */
 	QString target() const { return number.isEmpty() ? uri : number; }

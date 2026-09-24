@@ -794,6 +794,10 @@ void CallDialog::refreshHistory()
 		 * dialable number, else the full SIP URI. */
 		QString target = e.target();
 
+		/* Format: "count  target  date time" — count shown
+		 * in parentheses when > 1. */
+		QString countStr = e.count > 1
+			? QString("(%1x)  ").arg(e.count) : QString();
 		QString label;
 		if (e.duration > 0) {
 			/* Format duration as M:SS */
@@ -803,15 +807,17 @@ void CallDialog::refreshHistory()
 				.arg(mins)
 				.arg(secs, 2, 10, QChar('0'));
 			label = e.info.isEmpty()
-				? QString("%1  (%3)  %2").arg(target,
-					e.ts.toString("MM-dd hh:mm"), dur)
-				: QString("%1  (%3)  %2").arg(e.info,
-					e.ts.toString("MM-dd hh:mm"), dur);
+				? QString("%1%2  (%3)  %4").arg(countStr,
+					target, dur,
+					e.ts.toString("MM-dd hh:mm"))
+				: QString("%1%2  (%3)  %4").arg(countStr,
+					e.info, dur,
+					e.ts.toString("MM-dd hh:mm"));
 		} else {
 			label = e.info.isEmpty()
-				? QString("%1  %2").arg(target,
+				? QString("%1%2  %3").arg(countStr, target,
 					e.ts.toString("MM-dd hh:mm"))
-				: QString("%1  %2").arg(e.info,
+				: QString("%1%2  %3").arg(countStr, e.info,
 					e.ts.toString("MM-dd hh:mm"));
 		}
 
