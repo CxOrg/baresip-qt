@@ -482,6 +482,13 @@ void TrayApp::convertToHangup(quintptr callPtr, const QString &peerUri)
 void TrayApp::callIncoming(quintptr callPtr, QString peerUri,
 			    QString peerName)
 {
+	/* Close any open dial/settings panels so the call-control
+	 * panel has the user's attention. */
+	if (idleCallDialog_ && idleCallDialog_->isVisible())
+		idleCallDialog_->hide();
+	if (settingsDialog_ && settingsDialog_->isVisible())
+		settingsDialog_->close();
+
 	setTrayIcon("call-incoming-symbolic", "go-next");
 
 	QMenu *callMenu = addCallMenu(callPtr,
