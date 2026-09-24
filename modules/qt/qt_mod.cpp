@@ -18,6 +18,8 @@
 #include <QDir>
 #include <QList>
 #include <QScreen>
+#include <QDebug>
+#include <cstdio>
 #include <QLoggingCategory>
 #include <QGuiApplication>
 #include <QtDBus/QDBusInterface>
@@ -448,12 +450,17 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		 * for connected calls. */
 		if (!missed) {
 			uint32_t dur = call_duration(call);
+			QString peerFull = uriToFull(call_peeruri(call));
+		fprintf(stderr, "qt: CALL_CLOSED dur=%u uri=%s outgoing=%d "
+		       "state=%d\n",
+		       dur, peerFull.toUtf8().constData(),
+		       call_is_outgoing(call),
+		       call_state(call));
 			if (dur > 0) {
 				QMetaObject::invokeMethod(mod->tray,
 					"updateHistoryDuration",
 					Qt::QueuedConnection,
-					Q_ARG(QString,
-						uriToFull(call_peeruri(call))),
+					Q_ARG(QString, peerFull),
 					Q_ARG(uint, dur));
 			}
 		}

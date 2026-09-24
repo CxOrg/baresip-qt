@@ -8,6 +8,8 @@
 #include <QTextStream>
 #include <QDir>
 #include <QStandardPaths>
+#include <QDebug>
+#include <cstdio>
 
 
 CallHistory *CallHistory::instance()
@@ -145,6 +147,9 @@ void CallHistory::save() const
 void CallHistory::add(const QString &number, const QString &uri,
 		      int type, const QString &info)
 {
+	fprintf(stderr, "CallHistory::add number='%s' uri='%s' type=%d\n",
+	       number.toUtf8().constData(),
+	       uri.toUtf8().constData(), type);
 	/* If an existing record matches this peer (same number, or
 	 * same uri when no number), increment its count and update
 	 * the timestamp. This collapses repeat calls to the same
@@ -157,6 +162,10 @@ void CallHistory::add(const QString &number, const QString &uri,
 		else if (!uri.isEmpty())
 			match = (e.uri == uri || e.number.isEmpty());
 		if (match) {
+			fprintf(stderr, "CallHistory::add matched entry %d "
+			       "old_uri='%s' new_uri='%s'\n",
+			       i, e.uri.toUtf8().constData(),
+			       uri.toUtf8().constData());
 			e.ts = QDateTime::currentDateTime();
 			e.type = type;
 			e.count++;
@@ -196,6 +205,8 @@ void CallHistory::add(const QString &number, const QString &uri,
 
 void CallHistory::updateDuration(const QString &uri, uint32_t duration)
 {
+	fprintf(stderr, "CallHistory::updateDuration uri='%s' dur=%u entries=%d\n",
+	       uri.toUtf8().constData(), duration, entries_.size());
 	/* Find the most recent entry matching this peer and update
 	 * its duration. Entries written before the uri column existed
 	 * match on the number instead. Searches backwards. */
