@@ -161,6 +161,13 @@ void CallHistory::add(const QString &number, const QString &uri,
 			e.type = type;
 			e.count++;
 			e.duration = 0;
+			/* Update uri so updateDuration() can find this
+			 * record by the current call's URI. The URI host
+			 * may differ between incoming (gateway) and
+			 * outgoing (account domain) calls to the same
+			 * number. */
+			if (!uri.isEmpty())
+				e.uri = uri;
 			save();
 			emit changed();
 			return;
