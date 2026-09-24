@@ -395,10 +395,12 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 		 * rejected/hangup before being answered. Mirrors the
 		 * outgoing-call logging at BEVENT_CALL_OUTGOING.
 		 * History stores the dial number (when the user part
-		 * is a phone number on our own domain) and the full
-		 * SIP URI. */
+		 * is a phone number) and the full SIP URI. The number
+		 * is kept regardless of the originating host — incoming
+		 * calls from a PSTN gateway have a foreign host but the
+		 * user part is still a valid dial number. */
 		QString peerNum = uriToNumber(call_peeruri(call));
-		if (!isDialNumber(peerNum) || isForeignToUa(ua, call_peeruri(call)))
+		if (!isDialNumber(peerNum))
 			peerNum.clear();
 		QString peerFull = uriToFull(call_peeruri(call));
 
@@ -422,7 +424,7 @@ static void event_handler(enum bevent_ev ev, struct bevent *event, void *arg)
 	case BEVENT_CALL_OUTGOING:
 	{
 		QString peerNum = uriToNumber(call_peeruri(call));
-		if (!isDialNumber(peerNum) || isForeignToUa(ua, call_peeruri(call)))
+		if (!isDialNumber(peerNum))
 			peerNum.clear();
 		QString peerFull = uriToFull(call_peeruri(call));
 
