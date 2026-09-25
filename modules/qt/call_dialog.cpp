@@ -543,7 +543,7 @@ void CallDialog::buildUi()
 	hf.setPointSize(hf.pointSize() - 1);
 	historyList_->horizontalHeader()->setFont(hf);
 	historyList_->horizontalHeader()->setStyleSheet(
-		"QHeaderView::section { padding: 0px; "
+		"QHeaderView::section { padding: 0px 0px 0px 4px; "
 		"border: none; background: palette(window); "
 		"text-align: left; }");
 	historyList_->horizontalHeader()->setDefaultAlignment(
@@ -791,7 +791,7 @@ void CallDialog::refreshHistory()
 	historyList_->clear();
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
-		{"", "*", "Call #", "m:s", "Date/Time", ""});
+		{"", "", "Call Number/URI", "M:S", "Date/Time", ""});
 
 	/* Restore saved column widths for non-stretch columns. */
 	QSettings s;
