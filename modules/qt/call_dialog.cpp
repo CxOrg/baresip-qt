@@ -847,7 +847,7 @@ void CallDialog::refreshHistory()
 		QString target = e.target();
 		QString display = e.info.isEmpty() ? target : e.info;
 
-		QString countStr = QString("%1x").arg(e.count);
+		QString countStr = QString::number(e.count);
 		QString durStr;
 		if (e.duration > 0) {
 			int mins = e.duration / 60;
