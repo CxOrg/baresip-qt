@@ -875,7 +875,7 @@ void CallDialog::refreshHistory()
 
 		/* Count column (col 1) */
 		auto *cntItem = new QTableWidgetItem(countStr);
-		cntItem->setFlags(Qt::ItemIsEnabled);
+		cntItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 		historyList_->setItem(row, 1, cntItem);
 
 		/* Number column ("Call #") — stash target in
@@ -891,12 +891,12 @@ void CallDialog::refreshHistory()
 
 		/* Duration column ("m:s") — now col 4 */
 		auto *durItem = new QTableWidgetItem(durStr);
-		durItem->setFlags(Qt::ItemIsEnabled);
+		durItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 		historyList_->setItem(row, 4, durItem);
 
 		/* Date/Time column — now col 3 */
 		auto *dateItem = new QTableWidgetItem(dateStr);
-		dateItem->setFlags(Qt::ItemIsEnabled);
+		dateItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 		historyList_->setItem(row, 3, dateItem);
 
 		/* Actions column */
@@ -1017,7 +1017,7 @@ void CallDialog::refreshContacts()
 		historyList_->setItem(row, 1, numItem);
 
 		auto *typeItem = new QTableWidgetItem(e.type);
-		typeItem->setFlags(Qt::ItemIsEnabled);
+		typeItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 		historyList_->setItem(row, 2, typeItem);
 
 		historyList_->setCellWidget(row, 3,
