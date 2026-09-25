@@ -805,7 +805,7 @@ void CallDialog::refreshHistory()
 	historyList_->clear();
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
-		{"", "", "Call Number/URI", "Date/Time", "M:S", ""});
+		{"X", "", "Call Number/URI", "Date/Time", "M:S", ""});
 
 	/* Restore saved column widths for non-stretch columns. */
 	QSettings s;
