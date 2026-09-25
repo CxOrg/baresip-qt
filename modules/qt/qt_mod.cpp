@@ -24,6 +24,10 @@
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
+
+#include <csignal>
+#include <sys/types.h>
+#include <unistd.h>
 #ifdef HAVE_LAYERSHELL
 #include <LayerShellQt/Window>
 #endif
@@ -885,9 +889,196 @@ static void apply_enabled_accounts(void)
 }
 
 
+/** Single-instance guard: refuse to start if another baresip process
+ *  is already running. Uses a PID file in ~/.baresip/baresip.pid; a
+ *  stale file (dead PID) is removed. Runs at module_init on the
+ *  baresip thread. Returns true if another instance is running.
+ */
+static bool another_instance_running(void)
+{
+	QString path = QDir::homePath() + "/.baresip/baresip.pid";
+	QFile f(path);
+	if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		bool ok = false;
+		pid_t oldpid = f.readLine().trimmed().toLong(&ok);
+		f.close();
+		if (ok && oldpid > 0 && kill(oldpid, 0) == 0) {
+			BS_INFO("qt: already running (pid %d)\n",
+				(int)oldpid);
+			return true;
+		}
+		QFile::remove(path);
+	}
+
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate |
+		   QIODevice::Text)) {
+		f.write(QString("%1\n").arg(getpid()).toUtf8());
+		f.close();
+	}
+	return false;
+}
+
+
+/** Migrate an existing ~/.baresip/config for the Qt build: enable the
+ *  qt and ctrl_tcp app modules, disable gtk/echo, comment out the
+ *  deprecated jitter-buffer keys, and add missing keys. Runs at
+ *  module_init — after baresip has parsed the config, so changes take
+ *  effect on the next start.
+ */
+static void migrate_config(void)
+{
+	QString path = QDir::homePath() + "/.baresip/config";
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return;
+
+	QStringList out;
+	bool changed = false;
+	bool qt_app = false, ctrl_app = false;
+	bool ctrl_listen = false, qt_clean = false;
+
+	while (!f.atEnd()) {
+		QString line = QString::fromUtf8(f.readLine());
+		/* Keep the newline; chomp only for parsing. */
+		QString eol = line.endsWith("\r\n") ? "\r\n"
+			    : (line.endsWith("\n") ? "\n" : QString());
+		QString body = line.left(line.size() - eol.size());
+
+		QString t = body;
+		bool commented = t.trimmed().startsWith('#');
+		QString key = t.section(' ', 0, 0,
+			QString::SectionSkipEmpty);
+		QString val = t.section(' ', 1, 1,
+			QString::SectionSkipEmpty);
+
+		QString emitLine;
+		if (key == "module_app") {
+			QString mod = val.section('.', 0, 0);
+			if (mod == "gtk" && !commented) {
+				emitLine = "#module_app\t\tgtk" MOD_EXT;
+			}
+			else if (mod == "qt") {
+				qt_app = true;
+				if (commented)
+					emitLine = "module_app\t\tqt" MOD_EXT;
+			}
+			else if (mod == "echo" && !commented) {
+				emitLine = "#module_app\t\techo" MOD_EXT;
+			}
+			else if (mod == "ctrl_tcp") {
+				ctrl_app = true;
+				if (commented)
+					emitLine = "module_app\t\t"
+						"ctrl_tcp" MOD_EXT;
+			}
+		}
+		else if (key.startsWith("audio_jitter_buffer") ||
+			 key.startsWith("video_jitter_buffer")) {
+			if (!commented)
+				emitLine = "#" + body;
+		}
+		else if (key == "ctrl_tcp_listen") {
+			ctrl_listen = true;
+			if (commented)
+				emitLine = "ctrl_tcp_listen\t\t127.0.0.1:4444";
+		}
+		else if (key == "qt_clean_number") {
+			qt_clean = true;
+			if (commented)
+				emitLine = "qt_clean_number\tyes";
+		}
+
+		if (!emitLine.isNull()) {
+			out << emitLine + eol;
+			changed = true;
+		}
+		else
+			out << line;
+	}
+	f.close();
+
+	if (!qt_app) {
+		out << "module_app\t\tqt" MOD_EXT "\n";
+		changed = true;
+	}
+	if (!ctrl_app) {
+		out << "module_app\t\tctrl_tcp" MOD_EXT "\n";
+		changed = true;
+	}
+	if (!ctrl_listen) {
+		out << "ctrl_tcp_listen\t\t127.0.0.1:4444\n";
+		changed = true;
+	}
+	if (!qt_clean) {
+		out << "qt_clean_number\tyes\n";
+		changed = true;
+	}
+
+	if (changed && f.open(QIODevice::WriteOnly | QIODevice::Truncate |
+			      QIODevice::Text)) {
+		for (const QString &l : out)
+			f.write(l.toUtf8());
+		f.close();
+		BS_INFO("qt: migrated %s for the Qt build\n",
+			path.toUtf8().constData());
+	}
+}
+
+
+/** Seed ~/.baresip/contacts with phone-number-oriented example
+ *  entries on first install (file absent). The upstream template's
+ *  generic SIP examples don't match the Qt UI's typed contacts. */
+static void seed_contacts(void)
+{
+	QString path = QDir::homePath() + "/.baresip/contacts";
+	if (QFile::exists(path))
+		return;
+
+	QFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+		return;
+
+	f.write(
+		"#\n"
+		"# SIP contacts\n"
+		"#\n"
+		"# Displayname <sip:user@domain>;addr-params\n"
+		"#\n"
+		"#  addr-params:\n"
+		"#    ;presence={none,p2p}\n"
+		"#    ;access={allow,block}\n"
+		"#    ;audio={inactive,sendonly,recvonly,sendrecv}\n"
+		"#    ;video={inactive,sendonly,recvonly,sendrecv}\n"
+		"#    ;type={Primary,Work,Home,Mobile,Business,SIP,Fax,Other}\n"
+		"\n"
+		"\n"
+		"\"Example Contact\" <sip:1234567890@example.com>;type=Primary\n"
+		"\"Work Phone\" <sip:9876543210@example.com>;type=Work\n"
+		"\"Mobile User\" <sip:+441234567890@example.com>;type=Mobile\n"
+		"\n"
+		"# Access rules\n"
+		"#\"Catch All\" <sip:*@*>;access=block\n"
+		"#\"Good Friend\" <sip:good@example.com>;"
+		"access=allow\n"
+		"\n");
+	f.close();
+}
+
+
 static int module_init(void)
 {
 	int err;
+
+	/* Single-instance guard: the PID lock lives here (not in
+	 * main()) so the package can build against unmodified
+	 * upstream baresip. */
+	if (another_instance_running())
+		return EALREADY;
+
+	/* Fix up an existing config for the Qt build and seed the
+	 * contacts file on first install. */
+	migrate_config();
+	seed_contacts();
 
 	qt_mod_obj.clean_number = false;
 	conf_get_bool(conf_cur(), "qt_clean_number", &qt_mod_obj.clean_number);

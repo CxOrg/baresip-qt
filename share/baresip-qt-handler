@@ -21,8 +21,12 @@ CTRL_HOST=127.0.0.1
 CTRL_PORT=4444
 
 # No argument: launched from the application menu -- just start baresip.
+# "-m qt" preloads the Qt UI module: needed on first install, where the
+# upstream config template does not yet list "module_app qt". The qt
+# module's init migrates the config to add that line, so subsequent
+# runs load it from the config; the preload is harmless then.
 if [ $# -eq 0 ]; then
-	exec env GDK_BACKEND=x11 baresip
+	exec env GDK_BACKEND=x11 baresip -m qt
 fi
 
 uri=$1

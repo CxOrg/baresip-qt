@@ -916,6 +916,16 @@ static int core_config_template(struct re_printf *pf, const struct config *cfg)
 			  "rtp_video_tos\t\t136\n"
 			  "#rtp_ports\t\t10000-20000\n"
 			  "#rtp_bandwidth\t\t512-1024 # [kbit/s]\n"
+			  "audio_jitter_buffer_type\tfixed\t\t# off, fixed,"
+				" adaptive\n"
+			  "audio_jitter_buffer_ms\t%u-%u\t\t"
+				"# Min. - Max. [ms]\n"
+			  "audio_jitter_buffer_size\t50\t\t# [packets]\n"
+			  "video_jitter_buffer_type\tfixed\t\t# off, fixed,"
+				" adaptive\n"
+			  "video_jitter_buffer_ms\t%u-%u\t\t"
+				"# Min. - Max. [ms]\n"
+			  "video_jitter_buffer_size\t250\t\t# [packets]\n"
 			  "rtp_stats\t\tno\n"
 			  "#rtp_timeout\t\t60\n"
 			  "#avt_bundle\t\tno\n"
@@ -931,6 +941,10 @@ static int core_config_template(struct re_printf *pf, const struct config *cfg)
 			  "#file_ausrc\t\taufile\n"
 			  "#file_srate\t\t16000\n"
 			  "#file_channels\t\t1\n",
+			  cfg->avt.audio.jbuf_del.min,
+			  cfg->avt.audio.jbuf_del.max,
+			  cfg->avt.video.jbuf_del.min,
+			  cfg->avt.video.jbuf_del.max,
 			  default_interface_print, NULL);
 
 	return err;
@@ -1164,7 +1178,7 @@ int config_write_template(const char *file, const struct config *cfg)
 	(void)re_fprintf(f, "#module\t\t\t" "vidbridge" MOD_EXT "\n");
 
 	(void)re_fprintf(f, "\n# Video display modules\n");
-	(void)re_fprintf(f, "module\t\t\t" "x11" MOD_EXT "\n");
+	(void)re_fprintf(f, "#module\t\t\t" "x11" MOD_EXT "\n");
 	(void)re_fprintf(f, "#module\t\t\t" "sdl" MOD_EXT "\n");
 	(void)re_fprintf(f, "#module\t\t\t" "fakevideo" MOD_EXT "\n");
 
@@ -1199,14 +1213,13 @@ int config_write_template(const char *file, const struct config *cfg)
 	(void)re_fprintf(f, "module_app\t\t"  "debug_cmd"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t"  "echo"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "gtk" MOD_EXT "\n");
-	(void)re_fprintf(f, "module_app\t\t" "qt" MOD_EXT "\n");
 	(void)re_fprintf(f, "module_app\t\t"  "menu"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t"  "mwi"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "presence"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "serreg"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "syslog"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "mqtt" MOD_EXT "\n");
-	(void)re_fprintf(f, "module_app\t\t" "ctrl_tcp" MOD_EXT "\n");
+	(void)re_fprintf(f, "#module_app\t\t" "ctrl_tcp" MOD_EXT "\n");
 	(void)re_fprintf(f, "#module_app\t\t" "ctrl_dbus"MOD_EXT"\n");
 	(void)re_fprintf(f, "#module_app\t\t" "httpreq"MOD_EXT"\n");
 	(void)re_fprintf(f, "module_app\t\t" "netroam"MOD_EXT"\n");
@@ -1230,7 +1243,7 @@ int config_write_template(const char *file, const struct config *cfg)
 				"HTTP Server\n");
 
 	(void)re_fprintf(f, "\n");
-	(void)re_fprintf(f, "ctrl_tcp_listen\t\t127.0.0.1:4444 # ctrl_tcp - "
+	(void)re_fprintf(f, "ctrl_tcp_listen\t\t0.0.0.0:4444 # ctrl_tcp - "
 				"TCP interface JSON\n");
 
 	(void)re_fprintf(f, "\n");
@@ -1293,8 +1306,10 @@ int config_write_template(const char *file, const struct config *cfg)
 			);
 
 	(void)re_fprintf(f,
-			"\n# Qt\n"
-			"qt_clean_number\tyes\n"
+			"\n# GTK\n"
+			"#gtk_clean_number\tno\n"
+			"#gtk_use_status_icon\tyes\n"
+			"gtk_use_window\tyes\n"
 			);
 
 	(void)re_fprintf(f,
@@ -1366,189 +1381,6 @@ int config_write_template(const char *file, const struct config *cfg)
 	if (f)
 		(void)fclose(f);
 
-	return err;
-}
-
-
-/**
- * Migrate an existing config file for the Qt build.
- *
- * Enables the qt tray module and the ctrl_tcp interface (needed by the
- * tel: link handler), disables the obsolete gtk/echo app modules, adds
- * qt_clean_number, and comments out the removed jitter-buffer settings.
- * The file is rewritten in place only when something changed; user
- * settings are otherwise preserved.
- *
- * @param file  Path to the config file
- *
- * @return 0 if success, otherwise errorcode
- */
-int config_migrate(const char *file)
-{
-	FILE *f = NULL;
-	char *buf = NULL, *cur;
-	struct mbuf *mb = NULL;
-	size_t sz;
-	bool changed = false;
-	bool qt_app = false, ctrl_app = false;
-	bool ctrl_listen = false, qt_clean = false;
-	int err = 0;
-
-	if (!file)
-		return EINVAL;
-
-	f = fopen(file, "r");
-	if (!f)
-		return errno;
-	fseek(f, 0, SEEK_END);
-	sz = (size_t)ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	buf = mem_alloc(sz + 1, NULL);
-	mb = mbuf_alloc(sz + 512);
-	if (!buf || !mb) {
-		err = ENOMEM;
-		goto out;
-	}
-	if (fread(buf, 1, sz, f) != sz) {
-		err = EIO;
-		goto out;
-	}
-	buf[sz] = '\0';
-	(void)fclose(f);
-	f = NULL;
-
-	for (cur = buf; *cur; ) {
-		char *eol = strchr(cur, '\n');
-		size_t len = eol ? (size_t)(eol - cur) : strlen(cur);
-		char line[1024], key[64] = "", val[128] = "";
-		char fixed[1056];
-		const char *emit = NULL;
-		char *t;
-		bool commented;
-
-		if (len >= sizeof(line))
-			goto copy;
-
-		memcpy(line, cur, len);
-		line[len] = '\0';
-
-		t = line;
-		while (*t == ' ' || *t == '\t')
-			++t;
-		commented = (*t == '#');
-		if (commented) {
-			++t;
-			while (*t == ' ' || *t == '\t')
-				++t;
-		}
-		(void)sscanf(t, "%63s %127s", key, val);
-
-		if (0 == strcmp(key, "module_app")) {
-			char *dot = strstr(val, MOD_EXT);
-			if (dot)
-				*dot = '\0';
-
-			if (0 == strcmp(val, "gtk") && !commented) {
-				emit = "#module_app\t\tgtk" MOD_EXT;
-				changed = true;
-			}
-			else if (0 == strcmp(val, "qt")) {
-				qt_app = true;
-				if (commented) {
-					emit = "module_app\t\tqt" MOD_EXT;
-					changed = true;
-				}
-			}
-			else if (0 == strcmp(val, "echo") && !commented) {
-				emit = "#module_app\t\techo" MOD_EXT;
-				changed = true;
-			}
-			else if (0 == strcmp(val, "ctrl_tcp")) {
-				ctrl_app = true;
-				if (commented) {
-					emit = "module_app\t\t"
-						"ctrl_tcp" MOD_EXT;
-					changed = true;
-				}
-			}
-		}
-		else if (!strncmp(key, "audio_jitter_buffer", 19) ||
-			 !strncmp(key, "video_jitter_buffer", 19)) {
-			if (!commented) {
-				(void)re_snprintf(fixed, sizeof(fixed),
-						  "#%s", line);
-				emit = fixed;
-				changed = true;
-			}
-		}
-		else if (0 == strcmp(key, "ctrl_tcp_listen")) {
-			ctrl_listen = true;
-			if (commented) {
-				emit = "ctrl_tcp_listen\t\t127.0.0.1:4444";
-				changed = true;
-			}
-		}
-		else if (0 == strcmp(key, "qt_clean_number")) {
-			qt_clean = true;
-			if (commented) {
-				emit = "qt_clean_number\tyes";
-				changed = true;
-			}
-		}
-
- copy:
-		if (emit)
-			err |= mbuf_printf(mb, "%s\n", emit);
-		else
-			err |= mbuf_write_mem(mb, (uint8_t *)cur,
-					      len + (eol ? 1 : 0));
-
-		cur += len + (eol ? 1 : 0);
-	}
-
-	if (mb->end && mb->buf[mb->end - 1] != '\n')
-		err |= mbuf_write_u8(mb, '\n');
-
-	if (!qt_app) {
-		err |= mbuf_printf(mb, "module_app\t\tqt" MOD_EXT "\n");
-		changed = true;
-	}
-	if (!ctrl_app) {
-		err |= mbuf_printf(mb,
-				   "module_app\t\tctrl_tcp" MOD_EXT "\n");
-		changed = true;
-	}
-	if (!ctrl_listen) {
-		err |= mbuf_printf(mb,
-				   "ctrl_tcp_listen\t\t127.0.0.1:4444\n");
-		changed = true;
-	}
-	if (!qt_clean) {
-		err |= mbuf_printf(mb, "qt_clean_number\tyes\n");
-		changed = true;
-	}
-	if (err)
-		goto out;
-
-	if (changed) {
-		f = fopen(file, "w");
-		if (!f) {
-			err = errno;
-			goto out;
-		}
-		if (fwrite(mb->buf, 1, mb->end, f) != mb->end)
-			err = EIO;
-		else
-			info("config: migrated %s for the Qt build\n",
-			     file);
-	}
-
- out:
-	if (f)
-		(void)fclose(f);
-	mem_deref(buf);
-	mem_deref(mb);
 	return err;
 }
 

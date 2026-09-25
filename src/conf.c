@@ -358,11 +358,6 @@ int conf_configure(void)
 		if (err)
 			goto out;
 	}
-	else {
-		/* Existing config: apply Qt-build fixes (qt module,
-		 * ctrl_tcp, dropped jitter-buffer keys). */
-		(void)config_migrate(file);
-	}
 
 	conf_obj = mem_deref(conf_obj);
 	err = conf_alloc(&conf_obj, file);

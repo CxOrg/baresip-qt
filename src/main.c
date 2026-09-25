@@ -4,7 +4,6 @@
  * Copyright (C) 2010 - 2021 Alfred E. Heggestad
  */
 #include <stdlib.h>
-#include <signal.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -119,43 +118,6 @@ int main(int argc, char *argv[])
 	err = libre_init();
 	if (err)
 		goto out;
-
-	/* Single-instance guard: refuse to start if another baresip
-	 * process is already running. Uses a PID file in
-	 * ~/.baresip/baresip.pid; a stale file (dead PID) is removed. */
-	{
-		char home[256];
-		char pidpath[256];
-		FILE *pf;
-
-		if (fs_gethome(home, sizeof(home)))
-			goto skip_lock;
-		re_snprintf(pidpath, sizeof(pidpath),
-			   "%s/.baresip/baresip.pid", home);
-
-		pf = fopen(pidpath, "r");
-		if (pf) {
-			pid_t oldpid = 0;
-			if (fscanf(pf, "%d", &oldpid) == 1 && oldpid > 0) {
-				if (kill(oldpid, 0) == 0) {
-					fclose(pf);
-					(void)re_fprintf(stderr,
-						"baresip: already running"
-						" (pid %d)\n", oldpid);
-					return -1;
-				}
-			}
-			fclose(pf);
-			(void)unlink(pidpath);
-		}
-
-		pf = fopen(pidpath, "w");
-		if (pf) {
-			(void)fprintf(pf, "%d\n", (int)getpid());
-			fclose(pf);
-		}
-	skip_lock: ;
-	}
 
 #ifdef RE_TRACE_ENABLED
 	err = re_trace_init("re_trace.json");
@@ -400,17 +362,6 @@ int main(int argc, char *argv[])
 
 	/* Check for memory leaks */
 	mem_debug();
-
-	/* Remove the single-instance PID lock. */
-	{
-		char home[256];
-		char pidpath[256];
-		if (!fs_gethome(home, sizeof(home))) {
-			re_snprintf(pidpath, sizeof(pidpath),
-				   "%s/.baresip/baresip.pid", home);
-			(void)unlink(pidpath);
-		}
-	}
 
 	return err;
 }
