@@ -805,9 +805,9 @@ void CallDialog::refreshHistory()
 	historyList_->clear();
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
-		{"X", "", "Call Number/URI", "Date/Time", "M:S", ""});
+		{"", "X", "Call Number/URI", "Date/Time", "M:S", ""});
 	/* Generic call icon in the call-direction column header. */
-	historyList_->horizontalHeaderItem(1)->setIcon(
+	historyList_->horizontalHeaderItem(0)->setIcon(
 		QIcon::fromTheme("call-start-symbolic"));
 
 	/* Restore saved column widths for non-stretch columns. */
@@ -865,18 +865,18 @@ void CallDialog::refreshHistory()
 
 		historyList_->insertRow(row);
 
-		/* Count column (col 0) */
-		auto *cntItem = new QTableWidgetItem(countStr);
-		cntItem->setFlags(Qt::ItemIsEnabled);
-		historyList_->setItem(row, 0, cntItem);
-
-		/* Icon column (col 1) */
+		/* Icon column (col 0) */
 		auto *iconItem = new QTableWidgetItem();
 		QIcon ic = QIcon::fromTheme(iconName);
 		if (ic.isNull() && !fallback.isEmpty())
 			ic = QIcon::fromTheme(fallback);
 		iconItem->setIcon(ic);
-		historyList_->setItem(row, 1, iconItem);
+		historyList_->setItem(row, 0, iconItem);
+
+		/* Count column (col 1) */
+		auto *cntItem = new QTableWidgetItem(countStr);
+		cntItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 1, cntItem);
 
 		/* Number column ("Call #") — stash target in
 		 * UserRole for click-to-fill. */
