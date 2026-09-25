@@ -543,9 +543,10 @@ void CallDialog::buildUi()
 	hf.setPointSize(hf.pointSize() - 1);
 	historyList_->horizontalHeader()->setFont(hf);
 	historyList_->horizontalHeader()->setStyleSheet(
+		"QHeaderView { margin: 0px; padding: 0px; }"
 		"QHeaderView::section { padding: 0px 0px 0px 4px; "
-		"border: none; background: palette(window); "
-		"text-align: left; }");
+		"margin: 0px; border: none; "
+		"background: palette(window); text-align: left; }");
 	historyList_->horizontalHeader()->setDefaultAlignment(
 		Qt::AlignLeft | Qt::AlignVCenter);
 	/* Allow user to drag column widths. */
