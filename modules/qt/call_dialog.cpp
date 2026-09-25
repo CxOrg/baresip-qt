@@ -19,6 +19,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QHeaderView>
+#include <QSettings>
 #include <QMessageBox>
 #include <QPalette>
 #include <QIcon>
@@ -532,18 +533,35 @@ void CallDialog::buildUi()
 	historyList_->setVerticalScrollMode(
 		QAbstractItemView::ScrollPerPixel);
 	historyList_->verticalHeader()->setVisible(false);
-	historyList_->setHorizontalScrollBarPolicy(
-		Qt::ScrollBarAlwaysOff);
 	historyList_->setVerticalScrollBarPolicy(
 		Qt::ScrollBarAsNeeded);
 	/* Disable horizontal scrollbar — the dialog widens to fit. */
 	historyList_->setHorizontalScrollBarPolicy(
 		Qt::ScrollBarAlwaysOff);
+	/* Minimise header height — compact font, minimal padding. */
+	historyList_->horizontalHeader()->setFixedHeight(20);
+	historyList_->horizontalHeader()->setStyleSheet(
+		"QHeaderView::section { padding: 1px 2px; "
+		"font-size: 11px; border: none; "
+		"background: palette(window); }");
+	/* Allow user to drag column widths. */
+	historyList_->horizontalHeader()->setSectionsMovable(false);
+	historyList_->horizontalHeader()->setSectionResizeMode(
+		QHeaderView::Interactive);
 	layout->addWidget(historyList_);
 	connect(historyList_, &QTableWidget::itemClicked,
 		this, &CallDialog::onHistoryClicked);
 	connect(historyList_, &QTableWidget::itemDoubleClicked,
 		this, &CallDialog::onHistoryDoubleClicked);
+	/* Save column widths when the user resizes. */
+	connect(historyList_->horizontalHeader(),
+		&QHeaderView::sectionResized,
+		this, [this](int col, int, int w) {
+			QSettings s;
+			s.beginGroup(showingContacts_
+				? "contactCols" : "historyCols");
+			s.setValue(QString::number(col), w);
+		});
 
 	/* Button row: green on the left, red on the right. */
 	auto *btnRow = new QHBoxLayout();
@@ -769,14 +787,29 @@ void CallDialog::refreshHistory()
 	historyList_->clear();
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
-		{"", "Number", "Count", "Duration", "Date/Time", ""});
-	historyList_->setColumnWidth(0, 28);  /* icon */
-	historyList_->setColumnWidth(2, 50);  /* count */
-	historyList_->setColumnWidth(3, 60);  /* duration */
-	historyList_->setColumnWidth(4, 90);  /* date/time */
-	historyList_->setColumnWidth(5, 50);  /* actions */
-	historyList_->horizontalHeader()->setSectionResizeMode(
-		1, QHeaderView::Stretch);
+		{"", "*", "Call #", "m:s", "Date/Time", ""});
+
+	/* Restore saved column widths, or use defaults. */
+	QSettings s;
+	s.beginGroup("historyCols");
+	int w0 = s.value("0", 28).toInt();   /* icon */
+	int w1 = s.value("1", 36).toInt();   /* count */
+	int w2 = s.value("2", 0).toInt();    /* number — stretch */
+	int w3 = s.value("3", 50).toInt();   /* duration */
+	int w4 = s.value("4", 90).toInt();   /* date/time */
+	int w5 = s.value("5", 50).toInt();   /* actions */
+	s.endGroup();
+	historyList_->setColumnWidth(0, w0);
+	historyList_->setColumnWidth(1, w1);
+	historyList_->setColumnWidth(3, w3);
+	historyList_->setColumnWidth(4, w4);
+	historyList_->setColumnWidth(5, w5);
+	/* Number column stretches if no saved width. */
+	if (w2 > 0)
+		historyList_->setColumnWidth(2, w2);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(2, QHeaderView::Stretch);
 
 	/* Most recent first; show up to 10 entries. */
 	auto entries = CallHistory::instance()->recent(10);
@@ -831,8 +864,13 @@ void CallDialog::refreshHistory()
 		iconItem->setIcon(ic);
 		historyList_->setItem(row, 0, iconItem);
 
-		/* Number column — stash target in UserRole for
-		 * click-to-fill. */
+		/* Count column ("*") */
+		auto *cntItem = new QTableWidgetItem(countStr);
+		cntItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 1, cntItem);
+
+		/* Number column ("Call #") — stash target in
+		 * UserRole for click-to-fill. */
 		auto *numItem = new QTableWidgetItem(display);
 		numItem->setData(Qt::UserRole,     target);
 		numItem->setData(Qt::UserRole + 1, e.ts);
@@ -840,14 +878,9 @@ void CallDialog::refreshHistory()
 		numItem->setData(Qt::UserRole + 3, e.uri);
 		numItem->setData(Qt::UserRole + 4, e.info);
 		numItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-		historyList_->setItem(row, 1, numItem);
+		historyList_->setItem(row, 2, numItem);
 
-		/* Count column */
-		auto *cntItem = new QTableWidgetItem(countStr);
-		cntItem->setFlags(Qt::ItemIsEnabled);
-		historyList_->setItem(row, 2, cntItem);
-
-		/* Duration column */
+		/* Duration column ("m:s") */
 		auto *durItem = new QTableWidgetItem(durStr);
 		durItem->setFlags(Qt::ItemIsEnabled);
 		historyList_->setItem(row, 3, durItem);
@@ -868,9 +901,9 @@ void CallDialog::onHistoryClicked(QTableWidgetItem *item)
 {
 	if (!item)
 		return;
-	/* The target is stashed on the Number column (col 1). */
+	/* The target is stashed on the Number column (col 2). */
 	int row = item->row();
-	auto *numItem = historyList_->item(row, 1);
+	auto *numItem = historyList_->item(row, 2);
 	if (!numItem)
 		return;
 	QString target = numItem->data(Qt::UserRole).toString();
@@ -884,7 +917,7 @@ void CallDialog::onHistoryDoubleClicked(QTableWidgetItem *item)
 	if (!item)
 		return;
 	int row = item->row();
-	auto *numItem = historyList_->item(row, 1);
+	auto *numItem = historyList_->item(row, 2);
 	if (!numItem)
 		return;
 	QString target = numItem->data(Qt::UserRole).toString();
@@ -923,12 +956,27 @@ void CallDialog::refreshContacts()
 	historyList_->setColumnCount(4);
 	historyList_->setHorizontalHeaderLabels(
 		{"Name", "Type", "Number/URI", ""});
-	historyList_->setColumnWidth(1, 70);  /* type */
-	historyList_->setColumnWidth(3, 50);  /* actions */
-	historyList_->horizontalHeader()->setSectionResizeMode(
-		0, QHeaderView::Stretch);
-	historyList_->horizontalHeader()->setSectionResizeMode(
-		2, QHeaderView::Stretch);
+
+	/* Restore saved column widths, or use defaults. */
+	QSettings s;
+	s.beginGroup("contactCols");
+	int c0 = s.value("0", 0).toInt();    /* name — stretch */
+	int c1 = s.value("1", 70).toInt();    /* type */
+	int c2 = s.value("2", 0).toInt();    /* number — stretch */
+	int c3 = s.value("3", 50).toInt();    /* actions */
+	s.endGroup();
+	historyList_->setColumnWidth(1, c1);
+	historyList_->setColumnWidth(3, c3);
+	if (c0 > 0)
+		historyList_->setColumnWidth(0, c0);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(0, QHeaderView::Stretch);
+	if (c2 > 0)
+		historyList_->setColumnWidth(2, c2);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(2, QHeaderView::Stretch);
 
 	loadContactsFile();
 
@@ -1025,11 +1073,11 @@ QWidget *CallDialog::makeActionWidget(int row, bool isContact)
 		l->addWidget(del);
 
 		connect(add, &QToolButton::clicked, this, [this, row]() {
-			auto *item = historyList_->item(row, 1);
+			auto *item = historyList_->item(row, 2);
 			openContactForm(-1, item);
 		});
 		connect(del, &QToolButton::clicked, this, [this, row]() {
-			auto *item = historyList_->item(row, 1);
+			auto *item = historyList_->item(row, 2);
 			if (!item)
 				return;
 			QDateTime ts = item->data(Qt::UserRole + 1)
