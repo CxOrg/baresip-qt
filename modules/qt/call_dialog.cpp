@@ -561,9 +561,11 @@ void CallDialog::buildUi()
 	historyList_->horizontalHeader()->setSectionsMovable(false);
 	historyList_->horizontalHeader()->setSectionResizeMode(
 		QHeaderView::Interactive);
-	/* No right padding on cell text. */
+	/* No right padding on cell text; no padding on icon/count
+	 * columns (0 and 1). */
 	historyList_->setStyleSheet(
-		"QTableWidget::item { padding-right: 0px; }");
+		"QTableWidget::item { padding-right: 0px; }"
+		"QTableWidget::item:selected { padding-right: 0px; }");
 	layout->addWidget(historyList_);
 	connect(historyList_, &QTableWidget::itemClicked,
 		this, &CallDialog::onHistoryClicked);
@@ -803,7 +805,7 @@ void CallDialog::refreshHistory()
 	historyList_->clear();
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
-		{"", "", "Call Number/URI", "M:S", "Date/Time", ""});
+		{"", "", "Call Number/URI", "Date/Time", "M:S", ""});
 
 	/* Restore saved column widths for non-stretch columns. */
 	QSettings s;
@@ -884,15 +886,15 @@ void CallDialog::refreshHistory()
 		numItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 		historyList_->setItem(row, 2, numItem);
 
-		/* Duration column ("m:s") */
+		/* Duration column ("m:s") — now col 4 */
 		auto *durItem = new QTableWidgetItem(durStr);
 		durItem->setFlags(Qt::ItemIsEnabled);
-		historyList_->setItem(row, 3, durItem);
+		historyList_->setItem(row, 4, durItem);
 
-		/* Date/Time column */
+		/* Date/Time column — now col 3 */
 		auto *dateItem = new QTableWidgetItem(dateStr);
 		dateItem->setFlags(Qt::ItemIsEnabled);
-		historyList_->setItem(row, 4, dateItem);
+		historyList_->setItem(row, 3, dateItem);
 
 		/* Actions column */
 		historyList_->setCellWidget(row, 5,
