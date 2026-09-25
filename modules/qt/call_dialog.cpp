@@ -806,6 +806,9 @@ void CallDialog::refreshHistory()
 	historyList_->setColumnCount(6);
 	historyList_->setHorizontalHeaderLabels(
 		{"X", "", "Call Number/URI", "Date/Time", "M:S", ""});
+	/* Generic call icon in the call-direction column header. */
+	historyList_->horizontalHeaderItem(1)->setIcon(
+		QIcon::fromTheme("call-start-symbolic"));
 
 	/* Restore saved column widths for non-stretch columns. */
 	QSettings s;
