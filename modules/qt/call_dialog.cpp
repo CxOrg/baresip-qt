@@ -410,7 +410,8 @@ void CallDialog::positionNearTray()
 
 void CallDialog::fitWidthToHistory()
 {
-	/* Widen the dialog to fit the table contents. */
+	/* Widen the dialog to fit the table contents, but never
+	 * wider than the available screen area. */
 	if (!historyList_ || historyList_->rowCount() == 0)
 		return;
 
@@ -424,6 +425,13 @@ void CallDialog::fitWidthToHistory()
 	/* Don't shrink below the initial width (buttons + label). */
 	if (maxWidth < 470)
 		maxWidth = 470;
+
+	/* Cap at the available screen width so the panel stays
+	 * fully visible. */
+	QRect avail = screen()->availableGeometry();
+	int maxAvail = avail.width() - 40;
+	if (maxWidth > maxAvail)
+		maxWidth = maxAvail;
 
 	resize(maxWidth, height());
 }
@@ -544,7 +552,7 @@ void CallDialog::buildUi()
 	historyList_->horizontalHeader()->setFont(hf);
 	historyList_->horizontalHeader()->setStyleSheet(
 		"QHeaderView { margin: 0px; padding: 0px; }"
-		"QHeaderView::section { padding: 0px 0px 0px 4px; "
+		"QHeaderView::section { padding: 0px 0px 1px 4px; "
 		"margin: 0px; border: none; "
 		"background: palette(window); text-align: left; }");
 	historyList_->horizontalHeader()->setDefaultAlignment(
@@ -553,6 +561,9 @@ void CallDialog::buildUi()
 	historyList_->horizontalHeader()->setSectionsMovable(false);
 	historyList_->horizontalHeader()->setSectionResizeMode(
 		QHeaderView::Interactive);
+	/* No right padding on cell text. */
+	historyList_->setStyleSheet(
+		"QTableWidget::item { padding-right: 0px; }");
 	layout->addWidget(historyList_);
 	connect(historyList_, &QTableWidget::itemClicked,
 		this, &CallDialog::onHistoryClicked);
@@ -849,18 +860,18 @@ void CallDialog::refreshHistory()
 
 		historyList_->insertRow(row);
 
-		/* Icon column */
+		/* Count column (col 0) */
+		auto *cntItem = new QTableWidgetItem(countStr);
+		cntItem->setFlags(Qt::ItemIsEnabled);
+		historyList_->setItem(row, 0, cntItem);
+
+		/* Icon column (col 1) */
 		auto *iconItem = new QTableWidgetItem();
 		QIcon ic = QIcon::fromTheme(iconName);
 		if (ic.isNull() && !fallback.isEmpty())
 			ic = QIcon::fromTheme(fallback);
 		iconItem->setIcon(ic);
-		historyList_->setItem(row, 0, iconItem);
-
-		/* Count column ("*") */
-		auto *cntItem = new QTableWidgetItem(countStr);
-		cntItem->setFlags(Qt::ItemIsEnabled);
-		historyList_->setItem(row, 1, cntItem);
+		historyList_->setItem(row, 1, iconItem);
 
 		/* Number column ("Call #") — stash target in
 		 * UserRole for click-to-fill. */
