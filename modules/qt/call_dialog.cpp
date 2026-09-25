@@ -538,12 +538,13 @@ void CallDialog::buildUi()
 	/* Disable horizontal scrollbar — the dialog widens to fit. */
 	historyList_->setHorizontalScrollBarPolicy(
 		Qt::ScrollBarAlwaysOff);
-	/* Minimise header height — compact font, minimal padding. */
-	historyList_->horizontalHeader()->setFixedHeight(20);
+	/* Header font: 1pt smaller than the table font. */
+	QFont hf = historyList_->font();
+	hf.setPointSize(hf.pointSize() - 1);
+	historyList_->horizontalHeader()->setFont(hf);
 	historyList_->horizontalHeader()->setStyleSheet(
 		"QHeaderView::section { padding: 1px 2px; "
-		"font-size: 11px; border: none; "
-		"background: palette(window); }");
+		"border: none; background: palette(window); }");
 	/* Allow user to drag column widths. */
 	historyList_->horizontalHeader()->setSectionsMovable(false);
 	historyList_->horizontalHeader()->setSectionResizeMode(
@@ -789,27 +790,16 @@ void CallDialog::refreshHistory()
 	historyList_->setHorizontalHeaderLabels(
 		{"", "*", "Call #", "m:s", "Date/Time", ""});
 
-	/* Restore saved column widths, or use defaults. */
+	/* Restore saved column widths for non-stretch columns. */
 	QSettings s;
 	s.beginGroup("historyCols");
-	int w0 = s.value("0", 28).toInt();   /* icon */
-	int w1 = s.value("1", 36).toInt();   /* count */
-	int w2 = s.value("2", 0).toInt();    /* number — stretch */
-	int w3 = s.value("3", 50).toInt();   /* duration */
-	int w4 = s.value("4", 90).toInt();   /* date/time */
-	int w5 = s.value("5", 50).toInt();   /* actions */
+	int w0 = s.value("0", -1).toInt();   /* icon */
+	int w1 = s.value("1", -1).toInt();   /* count */
+	int w2 = s.value("2", -1).toInt();   /* number — stretch */
+	int w3 = s.value("3", -1).toInt();   /* duration */
+	int w4 = s.value("4", -1).toInt();   /* date/time */
+	int w5 = s.value("5", -1).toInt();   /* actions */
 	s.endGroup();
-	historyList_->setColumnWidth(0, w0);
-	historyList_->setColumnWidth(1, w1);
-	historyList_->setColumnWidth(3, w3);
-	historyList_->setColumnWidth(4, w4);
-	historyList_->setColumnWidth(5, w5);
-	/* Number column stretches if no saved width. */
-	if (w2 > 0)
-		historyList_->setColumnWidth(2, w2);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(2, QHeaderView::Stretch);
 
 	/* Most recent first; show up to 10 entries. */
 	auto entries = CallHistory::instance()->recent(10);
@@ -894,6 +884,25 @@ void CallDialog::refreshHistory()
 		historyList_->setCellWidget(row, 5,
 			makeActionWidget(row, false));
 	}
+
+	/* Auto-fit all columns to content, then restore any
+	 * saved widths. Call # (col 2) stretches to fill. */
+	for (int c = 0; c < 6; ++c) {
+		if (c == 2) continue;
+		historyList_->resizeColumnToContents(c);
+	}
+	/* Apply saved widths if the user has resized. */
+	if (w0 >= 0) historyList_->setColumnWidth(0, w0);
+	if (w1 >= 0) historyList_->setColumnWidth(1, w1);
+	if (w3 >= 0) historyList_->setColumnWidth(3, w3);
+	if (w4 >= 0) historyList_->setColumnWidth(4, w4);
+	if (w5 >= 0) historyList_->setColumnWidth(5, w5);
+	/* Call # stretches, or uses saved width. */
+	if (w2 > 0)
+		historyList_->setColumnWidth(2, w2);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(2, QHeaderView::Stretch);
 }
 
 
@@ -957,26 +966,14 @@ void CallDialog::refreshContacts()
 	historyList_->setHorizontalHeaderLabels(
 		{"Name", "Type", "Number/URI", ""});
 
-	/* Restore saved column widths, or use defaults. */
+	/* Restore saved column widths. */
 	QSettings s;
 	s.beginGroup("contactCols");
-	int c0 = s.value("0", 0).toInt();    /* name — stretch */
-	int c1 = s.value("1", 70).toInt();    /* type */
-	int c2 = s.value("2", 0).toInt();    /* number — stretch */
-	int c3 = s.value("3", 50).toInt();    /* actions */
+	int c0 = s.value("0", -1).toInt();    /* name */
+	int c1 = s.value("1", -1).toInt();    /* type */
+	int c2 = s.value("2", -1).toInt();    /* number */
+	int c3 = s.value("3", -1).toInt();    /* actions */
 	s.endGroup();
-	historyList_->setColumnWidth(1, c1);
-	historyList_->setColumnWidth(3, c3);
-	if (c0 > 0)
-		historyList_->setColumnWidth(0, c0);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(0, QHeaderView::Stretch);
-	if (c2 > 0)
-		historyList_->setColumnWidth(2, c2);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(2, QHeaderView::Stretch);
 
 	loadContactsFile();
 
@@ -1004,6 +1001,25 @@ void CallDialog::refreshContacts()
 		historyList_->setCellWidget(row, 3,
 			makeActionWidget(row, true));
 	}
+
+	/* Auto-fit all columns to content, then restore saved
+	 * widths. Name and Number/URI stretch to fill. */
+	for (int c = 0; c < 4; ++c) {
+		if (c == 0 || c == 2) continue;
+		historyList_->resizeColumnToContents(c);
+	}
+	if (c1 >= 0) historyList_->setColumnWidth(1, c1);
+	if (c3 >= 0) historyList_->setColumnWidth(3, c3);
+	if (c0 > 0)
+		historyList_->setColumnWidth(0, c0);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(0, QHeaderView::Stretch);
+	if (c2 > 0)
+		historyList_->setColumnWidth(2, c2);
+	else
+		historyList_->horizontalHeader()->
+			setSectionResizeMode(2, QHeaderView::Stretch);
 }
 
 
