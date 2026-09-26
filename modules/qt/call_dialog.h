@@ -182,11 +182,13 @@ private:
 	QPushButton  *listToggleBtn_ = nullptr;
 	QTabBar      *listTabs_     = nullptr;
 	QTableWidget *historyList_ = nullptr;
+	QWidget      *listGrip_    = nullptr;
 
-	/* Bottom-edge drag resize of the history/contacts list. */
-	bool resizingList_ = false;
-	int  listResizeStartY_ = 0;
-	int  listResizeStartH_ = 0;
+	/* Bottom-left grip drag: resize panel width and height. */
+	bool resizingPanel_    = false;
+	QSize resizeStartSize_;
+	QPoint resizeStartGlobal_;
+	int  resizeStartTableH_ = 0;
 
 	/* Contact add/edit overlay form + delete-confirm overlay. */
 	QFrame    *formOverlay_   = nullptr;

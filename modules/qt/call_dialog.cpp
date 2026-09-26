@@ -28,6 +28,7 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
+#include <QPainter>
 #include <QWindow>
 #include <QFile>
 #include <QTextStream>
@@ -482,80 +483,81 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		}
 	}
 
-	/* Bottom-edge drag resize of the history/contacts list. */
-	if (historyList_ && obj == historyList_->viewport()) {
-		QWidget *vp = historyList_->viewport();
+	/* Bottom-left size grip: drag to resize the panel width and
+	 * height; the top-right corner stays fixed. */
+	if (listGrip_ && obj == listGrip_) {
 		switch (event->type()) {
-		case QEvent::MouseMove:
-		case QEvent::MouseButtonPress:
-		case QEvent::MouseButtonRelease: {
+		case QEvent::MouseButtonPress: {
 			auto *me = static_cast<QMouseEvent *>(event);
-			/* position() is viewport-relative; the header
-			 * sits above the viewport, so compare against
-			 * the viewport height, not the table's. */
-			int edgeY = vp->height() - 6;
-			bool nearEdge = me->position().y() >= edgeY;
-
-			if (event->type() == QEvent::MouseMove) {
-				if (resizingList_) {
-					int h = listResizeStartH_ +
-						int(me->globalPosition().y()) -
-						listResizeStartY_;
-					QRect avail =
-						screen()->availableGeometry();
-					int maxH = qMin(400, avail.height() -
-						panel_->mapToGlobal(
-							QPoint(0, 0)).y() - 60);
-					historyList_->setFixedHeight(
-						qBound(60, h, maxH));
-					adjustSize();
-					fitWidthToHistory();
-#ifdef HAVE_LAYERSHELL
-					if (layerShellApplied_ &&
-					    windowHandle()) {
-						auto *ls =
-						LayerShellQt::Window::get(
-							windowHandle());
-						if (ls)
-							ls->setDesiredSize(
-								size());
-					}
-#endif
-					return true;
-				}
-				vp->setCursor(nearEdge ? Qt::SizeVerCursor
-						       : Qt::ArrowCursor);
-				break;
-			}
-			if (event->type() == QEvent::MouseButtonPress) {
-				if (nearEdge &&
-				    me->button() == Qt::LeftButton) {
-					resizingList_ = true;
-					listResizeStartY_ =
-						int(me->globalPosition().y());
-					listResizeStartH_ =
-						historyList_->height();
-					/* Explicit grab: the filter consumes
-					 * the press, so Qt's implicit grab
-					 * is not established — without this,
-					 * moves outside the viewport are
-					 * lost. */
-					vp->grabMouse();
-					return true;
-				}
-				break;
-			}
-			/* MouseButtonRelease */
-			if (resizingList_) {
-				resizingList_ = false;
-				vp->releaseMouse();
+			if (me->button() == Qt::LeftButton) {
+				resizingPanel_ = true;
+				resizeStartSize_ = size();
+				resizeStartGlobal_ =
+					me->globalPosition().toPoint();
+				resizeStartTableH_ = historyList_->height();
+				/* The filter consumes the press, so
+				 * Qt's implicit grab is not
+				 * established — grab explicitly so
+				 * moves outside the grip are still
+				 * delivered. */
+				listGrip_->grabMouse();
 				return true;
 			}
 			break;
 		}
-		case QEvent::Leave:
-			if (!resizingList_)
-				vp->unsetCursor();
+		case QEvent::MouseMove: {
+			if (!resizingPanel_)
+				break;
+			auto *me = static_cast<QMouseEvent *>(event);
+			QPoint d = me->globalPosition().toPoint() -
+				   resizeStartGlobal_;
+			QRect avail = screen()->availableGeometry();
+			int minW = qMax(470, minimumSizeHint().width());
+			int minH = minimumSizeHint().height();
+			int maxTableH = qMin(400, avail.height() -
+				panel_->mapToGlobal(QPoint(0, 0)).y() - 60);
+			/* Dragging the grip left/down grows the panel;
+			 * the table absorbs the height delta and the
+			 * stretch column absorbs the width delta. */
+			int newTableH = qBound(60,
+				resizeStartTableH_ + d.y(), maxTableH);
+			historyList_->setFixedHeight(newTableH);
+			int newH = qBound(minH, resizeStartSize_.height() +
+				(newTableH - resizeStartTableH_),
+				avail.height() - 40);
+			int newW = qBound(minW,
+				resizeStartSize_.width() - d.x(),
+				avail.width() - 40);
+			int preRight = x() + width();
+			resize(newW, newH);
+			bool lsApplied = false;
+#ifdef HAVE_LAYERSHELL
+			if (layerShellApplied_ && windowHandle()) {
+				auto *ls = LayerShellQt::Window::get(
+					windowHandle());
+				if (ls) {
+					ls->setDesiredSize(size());
+					lsApplied = true;
+				}
+			}
+#endif
+			if (!lsApplied) {
+				int newX = preRight - newW;
+				if (newX < avail.left() + 4) {
+					newX = avail.left() + 4;
+					newW = preRight - newX;
+					resize(newW, newH);
+				}
+				move(newX, y());
+			}
+			return true;
+		}
+		case QEvent::MouseButtonRelease:
+			if (resizingPanel_) {
+				resizingPanel_ = false;
+				listGrip_->releaseMouse();
+				return true;
+			}
 			break;
 		default:
 			break;
@@ -650,11 +652,10 @@ void CallDialog::buildUi()
 		this, &CallDialog::onHistoryClicked);
 	connect(historyList_, &QTableWidget::itemDoubleClicked,
 		this, &CallDialog::onHistoryDoubleClicked);
-	/* Bottom-edge drag: resize the list height (position and
-	 * width stay fixed). The height is not persisted — KDE
-	 * Plasma window rules manage saved window geometry. */
-	historyList_->viewport()->setMouseTracking(true);
-	historyList_->viewport()->installEventFilter(this);
+	/* Bottom-left size grip: drag to resize the panel width and
+	 * height (the top-right corner stays fixed). The height is
+	 * not persisted — KDE Plasma window rules manage saved
+	 * window geometry. */
 	historyList_->setFixedHeight(200);
 	/* Save column widths when the user resizes. */
 	connect(historyList_->horizontalHeader(),
@@ -666,9 +667,26 @@ void CallDialog::buildUi()
 			s.setValue(QString::number(col), w);
 		});
 
-	/* Button row: green on the left, red on the right. */
+	/* Button row: grip on the far left, green next, red on the
+	 * right. */
 	auto *btnRow = new QHBoxLayout();
 	layout->addLayout(btnRow);
+
+	{
+		QPixmap pm(14, 16);
+		pm.fill(Qt::transparent);
+		QPainter p(&pm);
+		p.setPen(palette().color(QPalette::WindowText));
+		for (int i = 1; i <= 3; ++i)
+			p.drawLine(0, 15 - i * 4, i * 4 - 1, 15);
+		auto *grip = new QLabel(panel);
+		grip->setPixmap(pm);
+		grip->setFixedSize(14, 16);
+		grip->setCursor(Qt::SizeBDiagCursor);
+		grip->installEventFilter(this);
+		btnRow->addWidget(grip);
+		listGrip_ = grip;
+	}
 
 	greenBtn_ = makeButton("Call", "call-start", true);
 	redBtn_   = makeButton("Cancel", "call-stop", false);
