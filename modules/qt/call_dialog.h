@@ -149,6 +149,10 @@ private:
 	 *  in the last column of the table. */
 	QWidget *makeActionWidget(int row, bool isContact);
 
+	/** Contacts view: split the spare table width equally
+	 *  between the Name and Number/URI columns. */
+	void distributeContactColumns();
+
 	/** Contact add/edit overlay form. index >= 0 edits
 	 *  contactEntries_[index]; index < 0 adds a new contact,
 	 *  optionally prefilled from a history item's stored data. */

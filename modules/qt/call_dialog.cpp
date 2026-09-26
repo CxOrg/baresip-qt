@@ -28,7 +28,6 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
-#include <QPainter>
 #include <QWindow>
 #include <QFile>
 #include <QTextStream>
@@ -584,16 +583,10 @@ void CallDialog::buildUi()
 
 	/* Size grip overlaid on the outer frame's bottom-left
 	 * corner: drag to resize the panel width and height (the
-	 * top-right corner stays fixed). */
+	 * top-right corner stays fixed). No graphic — the resize
+	 * cursor on hover is the affordance. */
 	{
-		QPixmap pm(12, 12);
-		pm.fill(Qt::transparent);
-		QPainter p(&pm);
-		p.setPen(palette().color(QPalette::WindowText));
-		for (int i = 1; i <= 3; ++i)
-			p.drawLine(0, 11 - i * 3, i * 3 - 1, 11);
-		auto *grip = new QLabel(this);
-		grip->setPixmap(pm);
+		auto *grip = new QWidget(this);
 		grip->setFixedSize(12, 12);
 		grip->setCursor(Qt::SizeBDiagCursor);
 		grip->installEventFilter(this);
@@ -676,10 +669,14 @@ void CallDialog::buildUi()
 	 * not persisted — KDE Plasma window rules manage saved
 	 * window geometry. */
 	historyList_->setFixedHeight(200);
-	/* Save column widths when the user resizes. */
+	/* Save column widths when the user resizes. Stretch
+	 * columns are managed by the layout — don't persist. */
 	connect(historyList_->horizontalHeader(),
 		&QHeaderView::sectionResized,
 		this, [this](int col, int, int w) {
+			if (showingContacts_ ? (col == 0 || col == 1)
+					     : (col == 2))
+				return;
 			QSettings s;
 			s.beginGroup(showingContacts_
 				? "contactCols" : "historyCols");
@@ -920,7 +917,6 @@ void CallDialog::refreshHistory()
 	s.beginGroup("historyCols");
 	int w0 = s.value("0", -1).toInt();   /* icon */
 	int w1 = s.value("1", -1).toInt();   /* count */
-	int w2 = s.value("2", -1).toInt();   /* number — stretch */
 	int w3 = s.value("3", -1).toInt();   /* duration */
 	int w4 = s.value("4", -1).toInt();   /* date/time */
 	int w5 = s.value("5", -1).toInt();   /* actions */
@@ -1010,7 +1006,8 @@ void CallDialog::refreshHistory()
 	}
 
 	/* Auto-fit all columns to content, then restore any
-	 * saved widths. Call # (col 2) stretches to fill. */
+	 * saved widths. Call Number/URI (col 2) always stretches
+	 * to absorb the panel width. */
 	for (int c = 0; c < 6; ++c) {
 		if (c == 2) continue;
 		historyList_->resizeColumnToContents(c);
@@ -1021,12 +1018,8 @@ void CallDialog::refreshHistory()
 	if (w3 >= 0) historyList_->setColumnWidth(3, w3);
 	if (w4 >= 0) historyList_->setColumnWidth(4, w4);
 	if (w5 >= 0) historyList_->setColumnWidth(5, w5);
-	/* Call # stretches, or uses saved width. */
-	if (w2 > 0)
-		historyList_->setColumnWidth(2, w2);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(2, QHeaderView::Stretch);
+	historyList_->horizontalHeader()->
+		setSectionResizeMode(2, QHeaderView::Stretch);
 }
 
 
@@ -1083,9 +1076,24 @@ void CallDialog::showContacts(bool contacts)
 }
 
 
-void CallDialog::refreshContacts()
+/** Contacts view: split the spare table width equally between
+ *  the Name (col 0) and Number/URI (col 1) columns. */
+void CallDialog::distributeContactColumns()
 {
 	if (!historyList_)
+		return;
+	int fixed = historyList_->columnWidth(2) +
+		    historyList_->columnWidth(3);
+	int spare = historyList_->viewport()->width() - fixed;
+	if (spare < 80)
+		return;
+	historyList_->setColumnWidth(0, spare / 2);
+	historyList_->setColumnWidth(1, spare - spare / 2);
+}
+
+
+void CallDialog::refreshContacts()
+{	if (!historyList_)
 		return;
 
 	historyList_->clear();
@@ -1096,8 +1104,6 @@ void CallDialog::refreshContacts()
 	/* Restore saved column widths. */
 	QSettings s;
 	s.beginGroup("contactCols");
-	int c0 = s.value("0", -1).toInt();    /* name */
-	int c1 = s.value("1", -1).toInt();    /* number */
 	int c2 = s.value("2", -1).toInt();    /* type */
 	int c3 = s.value("3", -1).toInt();    /* actions */
 	s.endGroup();
@@ -1129,24 +1135,15 @@ void CallDialog::refreshContacts()
 			makeActionWidget(row, true));
 	}
 
-	/* Auto-fit all columns to content, then restore saved
-	 * widths. Name and Number/URI stretch to fill. */
+	/* Auto-fit Type and Actions to content; Name and
+	 * Number/URI share the spare width equally. */
 	for (int c = 0; c < 4; ++c) {
 		if (c == 0 || c == 1) continue;
 		historyList_->resizeColumnToContents(c);
 	}
 	if (c2 >= 0) historyList_->setColumnWidth(2, c2);
 	if (c3 >= 0) historyList_->setColumnWidth(3, c3);
-	if (c0 > 0)
-		historyList_->setColumnWidth(0, c0);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(0, QHeaderView::Stretch);
-	if (c1 > 0)
-		historyList_->setColumnWidth(1, c1);
-	else
-		historyList_->horizontalHeader()->
-			setSectionResizeMode(1, QHeaderView::Stretch);
+	distributeContactColumns();
 }
 
 
@@ -1756,6 +1753,10 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 		return;
 	if (listGrip_)
 		listGrip_->move(0, height() - listGrip_->height());
+	/* Contacts view: Name and Number/URI share the spare
+	 * width equally when the panel is resized. */
+	if (showingContacts_)
+		distributeContactColumns();
 	if (formOverlay_) {
 		int mw = panel_->width() / 20;
 		int mt = panel_->height() * 15 / 100;
