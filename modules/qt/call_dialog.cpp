@@ -483,7 +483,7 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 	}
 
 	/* Bottom-edge drag resize of the history/contacts list. */
-	if (obj == historyList_->viewport()) {
+	if (historyList_ && obj == historyList_->viewport()) {
 		auto *me = static_cast<QMouseEvent *>(event);
 		int edgeY = historyList_->height() - 6;
 		bool nearEdge = me->position().y() >= edgeY;
