@@ -481,6 +481,67 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 			return true;
 		}
 	}
+
+	/* Bottom-edge drag resize of the history/contacts list. */
+	if (obj == historyList_->viewport()) {
+		auto *me = static_cast<QMouseEvent *>(event);
+		int edgeY = historyList_->height() - 6;
+		bool nearEdge = me->position().y() >= edgeY;
+
+		switch (event->type()) {
+		case QEvent::MouseMove:
+			if (resizingList_) {
+				int h = listResizeStartH_ +
+					int(me->globalPosition().y()) -
+					listResizeStartY_;
+				QRect avail = screen()->availableGeometry();
+				int maxH = qMin(400, avail.height() -
+						panel_->mapToGlobal(
+							QPoint(0, 0)).y() - 60);
+				historyList_->setFixedHeight(
+					qBound(60, h, maxH));
+				adjustSize();
+				fitWidthToHistory();
+#ifdef HAVE_LAYERSHELL
+				if (layerShellApplied_ && windowHandle()) {
+					auto *ls = LayerShellQt::Window::get(
+						windowHandle());
+					if (ls)
+						ls->setDesiredSize(size());
+				}
+#endif
+				return true;
+			}
+			historyList_->viewport()->setCursor(
+				nearEdge ? Qt::SizeVerCursor
+					 : Qt::ArrowCursor);
+			break;
+		case QEvent::MouseButtonPress:
+			if (nearEdge && me->button() == Qt::LeftButton) {
+				resizingList_ = true;
+				listResizeStartY_ =
+					int(me->globalPosition().y());
+				listResizeStartH_ = historyList_->height();
+				return true;
+			}
+			break;
+		case QEvent::MouseButtonRelease:
+			if (resizingList_) {
+				resizingList_ = false;
+				QSettings s;
+				s.setValue("listHeight",
+					   historyList_->height());
+				return true;
+			}
+			break;
+		case QEvent::Leave:
+			if (!resizingList_)
+				historyList_->viewport()->unsetCursor();
+			break;
+		default:
+			break;
+		}
+	}
 	return QDialog::eventFilter(obj, event);
 }
 
@@ -531,7 +592,6 @@ void CallDialog::buildUi()
 
 	/* Call history list (shown only in Dialing state). */
 	historyList_ = new QTableWidget(panel);
-	historyList_->setMaximumHeight(200);
 	historyList_->setMinimumHeight(60);
 	historyList_->setShowGrid(false);
 	historyList_->setSelectionBehavior(
@@ -571,6 +631,16 @@ void CallDialog::buildUi()
 		this, &CallDialog::onHistoryClicked);
 	connect(historyList_, &QTableWidget::itemDoubleClicked,
 		this, &CallDialog::onHistoryDoubleClicked);
+	/* Bottom-edge drag: resize the list height (position and
+	 * width stay fixed). */
+	historyList_->viewport()->setMouseTracking(true);
+	historyList_->viewport()->installEventFilter(this);
+	/* Restore the user's saved list height. */
+	{
+		QSettings s;
+		int h = s.value("listHeight", 200).toInt();
+		historyList_->setFixedHeight(qBound(60, h, 400));
+	}
 	/* Save column widths when the user resizes. */
 	connect(historyList_->horizontalHeader(),
 		&QHeaderView::sectionResized,

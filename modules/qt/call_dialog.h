@@ -183,6 +183,11 @@ private:
 	QTabBar      *listTabs_     = nullptr;
 	QTableWidget *historyList_ = nullptr;
 
+	/* Bottom-edge drag resize of the history/contacts list. */
+	bool resizingList_ = false;
+	int  listResizeStartY_ = 0;
+	int  listResizeStartH_ = 0;
+
 	/* Contact add/edit overlay form + delete-confirm overlay. */
 	QFrame    *formOverlay_   = nullptr;
 	QFrame    *deleteOverlay_ = nullptr;
