@@ -1100,6 +1100,13 @@ void CallDialog::refreshContacts()
 	historyList_->setHorizontalHeaderLabels(
 		{"Name", "Number/URI", "Type", ""});
 
+	/* Reset resize modes — the history view leaves col 2 in
+	 * Stretch mode; contacts columns are all Interactive so
+	 * Type does not expand. */
+	for (int c = 0; c < 4; ++c)
+		historyList_->horizontalHeader()->setSectionResizeMode(
+			c, QHeaderView::Interactive);
+
 	/* Restore saved column widths. */
 	QSettings s;
 	s.beginGroup("contactCols");
