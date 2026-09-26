@@ -582,6 +582,25 @@ void CallDialog::buildUi()
 	outer->addWidget(panel);
 	panel_ = panel;
 
+	/* Size grip overlaid on the outer frame's bottom-left
+	 * corner: drag to resize the panel width and height (the
+	 * top-right corner stays fixed). */
+	{
+		QPixmap pm(12, 12);
+		pm.fill(Qt::transparent);
+		QPainter p(&pm);
+		p.setPen(palette().color(QPalette::WindowText));
+		for (int i = 1; i <= 3; ++i)
+			p.drawLine(0, 11 - i * 3, i * 3 - 1, 11);
+		auto *grip = new QLabel(this);
+		grip->setPixmap(pm);
+		grip->setFixedSize(12, 12);
+		grip->setCursor(Qt::SizeBDiagCursor);
+		grip->installEventFilter(this);
+		grip->raise();
+		listGrip_ = grip;
+	}
+
 	auto *layout = new QVBoxLayout(panel);
 
 	/* Top row: label + tab strip switching the list between the
@@ -667,26 +686,9 @@ void CallDialog::buildUi()
 			s.setValue(QString::number(col), w);
 		});
 
-	/* Button row: grip on the far left, green next, red on the
-	 * right. */
+	/* Button row: green on the left, red on the right. */
 	auto *btnRow = new QHBoxLayout();
 	layout->addLayout(btnRow);
-
-	{
-		QPixmap pm(14, 16);
-		pm.fill(Qt::transparent);
-		QPainter p(&pm);
-		p.setPen(palette().color(QPalette::WindowText));
-		for (int i = 1; i <= 3; ++i)
-			p.drawLine(0, 15 - i * 4, i * 4 - 1, 15);
-		auto *grip = new QLabel(panel);
-		grip->setPixmap(pm);
-		grip->setFixedSize(14, 16);
-		grip->setCursor(Qt::SizeBDiagCursor);
-		grip->installEventFilter(this);
-		btnRow->addWidget(grip);
-		listGrip_ = grip;
-	}
 
 	greenBtn_ = makeButton("Call", "call-start", true);
 	redBtn_   = makeButton("Cancel", "call-stop", false);
@@ -1752,6 +1754,8 @@ void CallDialog::resizeEvent(QResizeEvent *ev)
 	QDialog::resizeEvent(ev);
 	if (!panel_)
 		return;
+	if (listGrip_)
+		listGrip_->move(0, height() - listGrip_->height());
 	if (formOverlay_) {
 		int mw = panel_->width() / 20;
 		int mt = panel_->height() * 15 / 100;
