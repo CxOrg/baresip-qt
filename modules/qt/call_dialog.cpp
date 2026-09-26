@@ -494,12 +494,6 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 				resizeStartGlobal_ =
 					me->globalPosition().toPoint();
 				resizeStartTableH_ = historyList_->height();
-				/* The filter consumes the press, so
-				 * Qt's implicit grab is not
-				 * established — grab explicitly so
-				 * moves outside the grip are still
-				 * delivered. */
-				listGrip_->grabMouse();
 				return true;
 			}
 			break;
@@ -554,7 +548,6 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		case QEvent::MouseButtonRelease:
 			if (resizingPanel_) {
 				resizingPanel_ = false;
-				listGrip_->releaseMouse();
 				return true;
 			}
 			break;
