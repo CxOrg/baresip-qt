@@ -484,48 +484,59 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 
 	/* Bottom-edge drag resize of the history/contacts list. */
 	if (historyList_ && obj == historyList_->viewport()) {
-		auto *me = static_cast<QMouseEvent *>(event);
-		int edgeY = historyList_->height() - 6;
-		bool nearEdge = me->position().y() >= edgeY;
-
 		switch (event->type()) {
 		case QEvent::MouseMove:
-			if (resizingList_) {
-				int h = listResizeStartH_ +
-					int(me->globalPosition().y()) -
-					listResizeStartY_;
-				QRect avail = screen()->availableGeometry();
-				int maxH = qMin(400, avail.height() -
+		case QEvent::MouseButtonPress:
+		case QEvent::MouseButtonRelease: {
+			auto *me = static_cast<QMouseEvent *>(event);
+			int edgeY = historyList_->height() - 6;
+			bool nearEdge = me->position().y() >= edgeY;
+
+			if (event->type() == QEvent::MouseMove) {
+				if (resizingList_) {
+					int h = listResizeStartH_ +
+						int(me->globalPosition().y()) -
+						listResizeStartY_;
+					QRect avail =
+						screen()->availableGeometry();
+					int maxH = qMin(400, avail.height() -
 						panel_->mapToGlobal(
 							QPoint(0, 0)).y() - 60);
-				historyList_->setFixedHeight(
-					qBound(60, h, maxH));
-				adjustSize();
-				fitWidthToHistory();
+					historyList_->setFixedHeight(
+						qBound(60, h, maxH));
+					adjustSize();
+					fitWidthToHistory();
 #ifdef HAVE_LAYERSHELL
-				if (layerShellApplied_ && windowHandle()) {
-					auto *ls = LayerShellQt::Window::get(
-						windowHandle());
-					if (ls)
-						ls->setDesiredSize(size());
-				}
+					if (layerShellApplied_ &&
+					    windowHandle()) {
+						auto *ls =
+						LayerShellQt::Window::get(
+							windowHandle());
+						if (ls)
+							ls->setDesiredSize(
+								size());
+					}
 #endif
-				return true;
+					return true;
+				}
+				historyList_->viewport()->setCursor(
+					nearEdge ? Qt::SizeVerCursor
+						 : Qt::ArrowCursor);
+				break;
 			}
-			historyList_->viewport()->setCursor(
-				nearEdge ? Qt::SizeVerCursor
-					 : Qt::ArrowCursor);
-			break;
-		case QEvent::MouseButtonPress:
-			if (nearEdge && me->button() == Qt::LeftButton) {
-				resizingList_ = true;
-				listResizeStartY_ =
-					int(me->globalPosition().y());
-				listResizeStartH_ = historyList_->height();
-				return true;
+			if (event->type() == QEvent::MouseButtonPress) {
+				if (nearEdge &&
+				    me->button() == Qt::LeftButton) {
+					resizingList_ = true;
+					listResizeStartY_ =
+						int(me->globalPosition().y());
+					listResizeStartH_ =
+						historyList_->height();
+					return true;
+				}
+				break;
 			}
-			break;
-		case QEvent::MouseButtonRelease:
+			/* MouseButtonRelease */
 			if (resizingList_) {
 				resizingList_ = false;
 				QSettings s;
@@ -534,6 +545,7 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 				return true;
 			}
 			break;
+		}
 		case QEvent::Leave:
 			if (!resizingList_)
 				historyList_->viewport()->unsetCursor();
