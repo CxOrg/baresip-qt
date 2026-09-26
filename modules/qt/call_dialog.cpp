@@ -29,6 +29,7 @@
 #include <QGuiApplication>
 #include <QApplication>
 #include <QCursor>
+#include <QPainter>
 #include <QWindow>
 #include <QFile>
 #include <QTextStream>
@@ -226,9 +227,21 @@ static QPushButton *makeButton(const QString &text,
 	auto *btn = new QPushButton(text);
 	btn->setMinimumSize(96, 44);
 
+	/* Render the theme icon as a white pixmap so it is visible
+	 * on the saturated green/red button fill, sized larger and
+	 * spaced from the label text. */
 	QIcon ic = QIcon::fromTheme(iconName);
-	if (!ic.isNull())
-		btn->setIcon(ic);
+	if (!ic.isNull()) {
+		QPixmap pm = ic.pixmap(24, 24);
+		QImage img = pm.toImage().convertToFormat(
+			QImage::Format_ARGB32);
+		QPainter p(&img);
+		p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+		p.fillRect(img.rect(), QColor(255, 255, 255));
+		p.end();
+		btn->setIcon(QPixmap::fromImage(img));
+		btn->setIconSize(QSize(24, 24));
+	}
 
 	/* Tint via stylesheet so the colour is visible on any theme. */
 	if (green)
@@ -236,7 +249,9 @@ static QPushButton *makeButton(const QString &text,
 			"QPushButton { background-color: #2e7d32;"
 			"              color: white;"
 			"              font-weight: bold;"
-			"              border-radius: 6px; }"
+			"              border-radius: 6px;"
+			"              padding-left: 10px;"
+			"              qproperty-iconSize: 24px 24px; }"
 			"QPushButton:hover { background-color: #388e3c; }"
 			"QPushButton:disabled { background-color: #666;"
 			"                     color: #aaa; }");
@@ -245,7 +260,9 @@ static QPushButton *makeButton(const QString &text,
 			"QPushButton { background-color: #c62828;"
 			"              color: white;"
 			"              font-weight: bold;"
-			"              border-radius: 6px; }"
+			"              border-radius: 6px;"
+			"              padding-left: 10px;"
+			"              qproperty-iconSize: 24px 24px; }"
 			"QPushButton:hover { background-color: #d32f2f; }"
 			"QPushButton:disabled { background-color: #666;"
 			"                     color: #aaa; }");
