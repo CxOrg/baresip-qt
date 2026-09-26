@@ -549,9 +549,6 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 			if (resizingList_) {
 				resizingList_ = false;
 				vp->releaseMouse();
-				QSettings s;
-				s.setValue("listHeight",
-					   historyList_->height());
 				return true;
 			}
 			break;
@@ -654,15 +651,11 @@ void CallDialog::buildUi()
 	connect(historyList_, &QTableWidget::itemDoubleClicked,
 		this, &CallDialog::onHistoryDoubleClicked);
 	/* Bottom-edge drag: resize the list height (position and
-	 * width stay fixed). */
+	 * width stay fixed). The height is not persisted — KDE
+	 * Plasma window rules manage saved window geometry. */
 	historyList_->viewport()->setMouseTracking(true);
 	historyList_->viewport()->installEventFilter(this);
-	/* Restore the user's saved list height. */
-	{
-		QSettings s;
-		int h = s.value("listHeight", 200).toInt();
-		historyList_->setFixedHeight(qBound(60, h, 400));
-	}
+	historyList_->setFixedHeight(200);
 	/* Save column widths when the user resizes. */
 	connect(historyList_->horizontalHeader(),
 		&QHeaderView::sectionResized,
