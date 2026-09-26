@@ -20,6 +20,7 @@
 #include <QTableWidgetItem>
 #include <QHeaderView>
 #include <QSettings>
+#include <QTimer>
 #include <QMessageBox>
 #include <QPalette>
 #include <QIcon>
@@ -1070,7 +1071,8 @@ void CallDialog::showContacts(bool contacts)
 
 
 /** Contacts view: split the spare table width equally between
- *  the Name (col 0) and Number/URI (col 1) columns. */
+ *  the Name (col 0) and Number/URI (col 1) columns, and remember
+ *  the result for the next start. */
 void CallDialog::distributeContactColumns()
 {
 	if (!historyList_)
@@ -1082,6 +1084,10 @@ void CallDialog::distributeContactColumns()
 		return;
 	historyList_->setColumnWidth(0, spare / 2);
 	historyList_->setColumnWidth(1, spare - spare / 2);
+	QSettings s;
+	s.beginGroup("contactCols");
+	s.setValue("0", spare / 2);
+	s.setValue("1", spare - spare / 2);
 }
 
 
@@ -1097,6 +1103,8 @@ void CallDialog::refreshContacts()
 	/* Restore saved column widths. */
 	QSettings s;
 	s.beginGroup("contactCols");
+	int c0 = s.value("0", -1).toInt();    /* name */
+	int c1 = s.value("1", -1).toInt();    /* number */
 	int c2 = s.value("2", -1).toInt();    /* type */
 	int c3 = s.value("3", -1).toInt();    /* actions */
 	s.endGroup();
@@ -1128,15 +1136,23 @@ void CallDialog::refreshContacts()
 			makeActionWidget(row, true));
 	}
 
-	/* Auto-fit Type and Actions to content; Name and
-	 * Number/URI share the spare width equally. */
+	/* Auto-fit Type and Actions to content. Name and
+	 * Number/URI restore their last widths; on first use they
+	 * share the spare width equally (deferred until the table
+	 * is laid out so the viewport width is known). */
 	for (int c = 0; c < 4; ++c) {
 		if (c == 0 || c == 1) continue;
 		historyList_->resizeColumnToContents(c);
 	}
 	if (c2 >= 0) historyList_->setColumnWidth(2, c2);
 	if (c3 >= 0) historyList_->setColumnWidth(3, c3);
-	distributeContactColumns();
+	if (c0 >= 0 && c1 >= 0 && c0 + c1 <= width()) {
+		historyList_->setColumnWidth(0, c0);
+		historyList_->setColumnWidth(1, c1);
+	} else
+		QTimer::singleShot(0, this, [this]() {
+			distributeContactColumns();
+		});
 }
 
 
