@@ -484,12 +484,16 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 
 	/* Bottom-edge drag resize of the history/contacts list. */
 	if (historyList_ && obj == historyList_->viewport()) {
+		QWidget *vp = historyList_->viewport();
 		switch (event->type()) {
 		case QEvent::MouseMove:
 		case QEvent::MouseButtonPress:
 		case QEvent::MouseButtonRelease: {
 			auto *me = static_cast<QMouseEvent *>(event);
-			int edgeY = historyList_->height() - 6;
+			/* position() is viewport-relative; the header
+			 * sits above the viewport, so compare against
+			 * the viewport height, not the table's. */
+			int edgeY = vp->height() - 6;
 			bool nearEdge = me->position().y() >= edgeY;
 
 			if (event->type() == QEvent::MouseMove) {
@@ -519,9 +523,8 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 #endif
 					return true;
 				}
-				historyList_->viewport()->setCursor(
-					nearEdge ? Qt::SizeVerCursor
-						 : Qt::ArrowCursor);
+				vp->setCursor(nearEdge ? Qt::SizeVerCursor
+						       : Qt::ArrowCursor);
 				break;
 			}
 			if (event->type() == QEvent::MouseButtonPress) {
@@ -532,6 +535,12 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 						int(me->globalPosition().y());
 					listResizeStartH_ =
 						historyList_->height();
+					/* Explicit grab: the filter consumes
+					 * the press, so Qt's implicit grab
+					 * is not established — without this,
+					 * moves outside the viewport are
+					 * lost. */
+					vp->grabMouse();
 					return true;
 				}
 				break;
@@ -539,6 +548,7 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 			/* MouseButtonRelease */
 			if (resizingList_) {
 				resizingList_ = false;
+				vp->releaseMouse();
 				QSettings s;
 				s.setValue("listHeight",
 					   historyList_->height());
@@ -548,7 +558,7 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		}
 		case QEvent::Leave:
 			if (!resizingList_)
-				historyList_->viewport()->unsetCursor();
+				vp->unsetCursor();
 			break;
 		default:
 			break;

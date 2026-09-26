@@ -21,6 +21,8 @@
 #include <QDebug>
 #include <QLoggingCategory>
 #include <QGuiApplication>
+#include <QSet>
+#include <QRegularExpression>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
@@ -936,6 +938,8 @@ static void migrate_config(void)
 	bool changed = false;
 	bool qt_app = false, ctrl_app = false;
 	bool ctrl_listen = false, qt_clean = false;
+	bool drop = false;
+	QSet<QString> seenApps;
 
 	while (!f.atEnd()) {
 		QString line = QString::fromUtf8(f.readLine());
@@ -946,12 +950,15 @@ static void migrate_config(void)
 
 		QString t = body;
 		bool commented = t.trimmed().startsWith('#');
-		QString key = t.section(' ', 0, 0,
-			QString::SectionSkipEmpty);
-		QString val = t.section(' ', 1, 1,
-			QString::SectionSkipEmpty);
+		/* Keys/values are separated by tabs or spaces — split
+		 * on any whitespace run (sscanf "%s %s" behaviour). */
+		QStringList fields = t.split(QRegularExpression("\\s+"),
+			Qt::SkipEmptyParts);
+		QString key = fields.value(0);
+		QString val = fields.value(1);
 
 		QString emitLine;
+		drop = false;
 		if (key == "module_app") {
 			QString mod = val.section('.', 0, 0);
 			if (mod == "gtk" && !commented) {
@@ -959,17 +966,33 @@ static void migrate_config(void)
 			}
 			else if (mod == "qt") {
 				qt_app = true;
-				if (commented)
+				if (commented) {
 					emitLine = "module_app\t\tqt" MOD_EXT;
+					seenApps.insert("qt");
+				}
+				else if (seenApps.contains("qt")) {
+					/* Duplicate from an earlier buggy
+					 * migration — drop it. */
+					drop = true;
+				}
+				else
+					seenApps.insert("qt");
 			}
 			else if (mod == "echo" && !commented) {
 				emitLine = "#module_app\t\techo" MOD_EXT;
 			}
 			else if (mod == "ctrl_tcp") {
 				ctrl_app = true;
-				if (commented)
+				if (commented) {
 					emitLine = "module_app\t\t"
 						"ctrl_tcp" MOD_EXT;
+					seenApps.insert("ctrl_tcp");
+				}
+				else if (seenApps.contains("ctrl_tcp")) {
+					drop = true;
+				}
+				else
+					seenApps.insert("ctrl_tcp");
 			}
 		}
 		else if (key.startsWith("audio_jitter_buffer") ||
@@ -992,6 +1015,8 @@ static void migrate_config(void)
 			out << emitLine + eol;
 			changed = true;
 		}
+		else if (drop)
+			changed = true;   /* omit the line entirely */
 		else
 			out << line;
 	}
