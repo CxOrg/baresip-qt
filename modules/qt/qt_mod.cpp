@@ -816,8 +816,11 @@ static void ensure_kwin_rule(void)
 	     "--key", "Description", "Baresip - Window"});
 	run({"--file", "kwinrulesrc", "--group", uuid,
 	     "--key", "size", "470,320"});   /* default panel size */
+	/* sizerule 2 = "Remember": KWin itself writes the window's
+	 * last size back to this rule when it closes. (4 would be
+	 * "Force temporarily", which fights the grip resize.) */
 	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "sizerule", "4"});
+	     "--key", "sizerule", "2"});
 	run({"--file", "kwinrulesrc", "--group", uuid,
 	     "--key", "types", "293"});
 	run({"--file", "kwinrulesrc", "--group", uuid,
