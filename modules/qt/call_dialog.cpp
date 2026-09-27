@@ -297,6 +297,26 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	installEventFilter(this);
 	buildUi();
 	applyState();
+
+	/* Restore the panel size saved by a previous drag resize.
+	 * Measured after applyState() so the chrome excludes the
+	 * hidden dialpad: with the table at its current fixed
+	 * height H, the layout minimum is chrome + H. The table
+	 * absorbs the height delta. */
+	{
+		QSettings s;
+		int savedW = s.value("panelWidth", 0).toInt();
+		int savedH = s.value("panelHeight", 0).toInt();
+		if (savedW > 0 && savedH > 0) {
+			int tableH0 = historyList_->minimumHeight();
+			int chrome = minimumSizeHint().height() - tableH0;
+			int tableH = qBound(60, savedH - chrome, 400);
+			historyList_->setFixedHeight(tableH);
+			resize(savedW, savedH);
+			savedSize_ = true;
+		}
+	}
+
 	setupLayerShell();
 }
 
@@ -724,25 +744,6 @@ void CallDialog::buildUi()
 	 * InCall/Incoming state where the history list is hidden. */
 	setMinimumWidth(470);
 	resize(470, 320);
-
-	/* Restore the panel size saved by a previous drag resize.
-	 * The table absorbs the height delta — its surrounding
-	 * chrome (dial field, dialpad, buttons, margins) is
-	 * constant. */
-	{
-		QSettings s;
-		int savedW = s.value("panelWidth", 0).toInt();
-		int savedH = s.value("panelHeight", 0).toInt();
-		if (savedW > 0 && savedH > 0) {
-			int chrome = height() - historyList_->height();
-			int tableH = qBound(
-				historyList_->minimumHeight(),
-				savedH - chrome, 400);
-			historyList_->setFixedHeight(tableH);
-			resize(savedW, savedH);
-			savedSize_ = true;
-		}
-	}
 }
 
 
