@@ -23,7 +23,7 @@
 #include <QGuiApplication>
 #include <QSet>
 #include <QRegularExpression>
-#include <QSettings>
+#include <QProcess>
 #include <QUuid>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
@@ -741,10 +741,15 @@ void qt_mod_quit(void)
 /** KDE Plasma window rule: ensure ~/.config/kwinrulesrc has an
  *  entry for the baresip windows so KWin manages the panel size
  *  (sizerule 4 = KWin remembers the last size the user sets).
- *  Runs on the Qt thread after QApplication is up. The
- *  ignoregeometry entries from the KWin rule editor example are
- *  omitted — under test they were not needed for the size rule
- *  to be applied.
+ *  Runs on the Qt thread after QApplication is up.
+ *
+ *  The file is only ever modified through kwriteconfig6 (KWin's
+ *  own KConfig writer), which preserves all existing rules — a
+ *  direct rewrite here would drop them. The new rule is appended
+ *  to the [General] rules list and the count bumped, matching
+ *  what the KWin rules KCM writes. The ignoregeometry entries
+ *  from the rule-editor example are omitted — under test they
+ *  were not needed for the size rule to be applied.
  */
 static void ensure_kwin_rule(void)
 {
@@ -756,30 +761,73 @@ static void ensure_kwin_rule(void)
 		return;
 
 	QString path = QDir::homePath() + "/.config/kwinrulesrc";
-	QSettings s(path, QSettings::NativeFormat);
-	QString wmclass = "baresip baresip";
 
-	/* An entry already exists? */
-	const QStringList groups = s.childGroups();
-	for (const QString &group : groups) {
-		if (s.value(group + "/wmclass").toString()
-		    .compare(wmclass, Qt::CaseInsensitive) == 0)
+	/* Existing baresip rule? Scan the raw text — no writes. */
+	QFile f(path);
+	QStringList lines;
+	if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		while (!f.atEnd())
+			lines << QString::fromUtf8(f.readLine());
+		f.close();
+	}
+	for (const QString &line : lines) {
+		if (line.startsWith("wmclass=") &&
+		    line.contains("baresip", Qt::CaseInsensitive))
 			return;
 	}
 
-	s.beginGroup(QUuid::createUuid().toString(
-		QUuid::WithoutBraces));
-	s.setValue("Description", "Baresip - Window");
-	s.setValue("size", "470,320");   /* default panel size */
-	s.setValue("sizerule", 4);
-	s.setValue("types", 293);
-	s.setValue("wmclass", wmclass);
-	s.setValue("wmclasscomplete", true);
-	s.setValue("wmclassmatch", 1);
-	s.endGroup();
-	s.sync();
+	auto run = [](const QStringList &args) {
+		QProcess::execute("kwriteconfig6", args);
+	};
+	QString uuid = QUuid::createUuid().toString(
+		QUuid::WithoutBraces);
 
-	BS_INFO("qt: created KWin window rule in %s\n",
+	/* [General]: bump count and append the group name to the
+	 * rules list (the KCM's own bookkeeping). */
+	int count = 0;
+	{
+		QProcess p;
+		p.start("kreadconfig6", {"--file", "kwinrulesrc",
+			"--group", "General", "--key", "count"});
+		p.waitForFinished(2000);
+		count = QString::fromUtf8(p.readAllStandardOutput())
+			.trimmed().toInt();
+	}
+	run({"--file", "kwinrulesrc", "--group", "General",
+	     "--key", "count", QString::number(count + 1)});
+
+	QString ruleList;
+	{
+		QProcess p;
+		p.start("kreadconfig6", {"--file", "kwinrulesrc",
+			"--group", "General", "--key", "rules"});
+		p.waitForFinished(2000);
+		ruleList = QString::fromUtf8(p.readAllStandardOutput())
+			.trimmed();
+	}
+	if (!ruleList.isEmpty())
+		ruleList += ",";
+	ruleList += uuid;
+	run({"--file", "kwinrulesrc", "--group", "General",
+	     "--key", "rules", ruleList});
+
+	/* The rule itself. */
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "Description", "Baresip - Window"});
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "size", "470,320"});   /* default panel size */
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "sizerule", "4"});
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "types", "293"});
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "wmclass", "baresip baresip"});
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "wmclasscomplete", "true"});
+	run({"--file", "kwinrulesrc", "--group", uuid,
+	     "--key", "wmclassmatch", "1"});
+
+	BS_INFO("qt: added KWin window rule to %s\n",
 		path.toUtf8().constData());
 
 	/* Ask KWin to reload its rule book. */
