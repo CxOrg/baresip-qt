@@ -23,7 +23,6 @@
 #include <QGuiApplication>
 #include <QSet>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
@@ -243,6 +242,82 @@ static int queryTrayPanel(QScreen *screen, bool *isBottom, int *centerX)
 }
 
 
+/** Qt UI settings live in ~/.baresip/config as `qt_<key> <value>`
+ *  lines — the same file and prefix convention as qt_clean_number.
+ *  baresip ignores unknown keys, so they coexist with the core
+ *  configuration. */
+static QString qt_settings_path(void)
+{
+	return QDir::homePath() + "/.baresip/config";
+}
+
+
+/** Read the `qt_<key>` entry from ~/.baresip/config. Returns an
+ *  empty string when the key is absent. */
+QString qt_settings_get(const QString &key)
+{
+	QFile f(qt_settings_path());
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return QString();
+	QString needle = "qt_" + key;
+	while (!f.atEnd()) {
+		QString t = QString::fromUtf8(f.readLine()).trimmed();
+		if (t.isEmpty() || t.startsWith('#'))
+			continue;
+		QStringList fields = t.split(QRegularExpression("\\s+"),
+			Qt::SkipEmptyParts);
+		if (fields.value(0) == needle)
+			return fields.value(1);
+	}
+	return QString();
+}
+
+
+/** Write the `qt_<key>` entry in ~/.baresip/config — updates the
+ *  line in place or appends it, preserving all other content. */
+void qt_settings_set(const QString &key, const QString &value)
+{
+	QString path = qt_settings_path();
+	QString needle = "qt_" + key;
+	QFile f(path);
+	QStringList out;
+	bool found = false, haveQtKeys = false;
+	if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		while (!f.atEnd()) {
+			QString line = QString::fromUtf8(f.readLine());
+			QString t = line.trimmed();
+			if (!t.isEmpty() && !t.startsWith('#')) {
+				QString k = t.split(
+					QRegularExpression("\\s+"),
+					Qt::SkipEmptyParts).value(0);
+				if (k.startsWith("qt_"))
+					haveQtKeys = true;
+				if (k == needle) {
+					out << needle + "\t\t" + value
+					    + "\n";
+					found = true;
+					continue;
+				}
+			}
+			out << line;
+		}
+		f.close();
+	}
+	if (!found) {
+		/* Label the block on first use. */
+		if (!haveQtKeys)
+			out << "\n#\n# Qt UI settings\n#\n";
+		out << needle + "\t\t" + value + "\n";
+	}
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate |
+		   QIODevice::Text)) {
+		for (const QString &l : out)
+			f.write(l.toUtf8());
+		f.close();
+	}
+}
+
+
 QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 			bool *anchorBottom)
 {
@@ -281,14 +356,18 @@ QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 	if (anchorLeft)
 		*anchorLeft = left;
 
-	/* User-tunable offsets from the settings file: the gap
-	 * between the desktop panel edge and our panel (top), and
-	 * the margin from the screen side edge (side). Defaults
-	 * match the previous hard-coded values; edit them in the
-	 * settings file to fine-tune the panel position. */
-	QSettings s;
-	int topGap  = s.value("panelTopOffset", 16).toInt();
-	int sideGap = s.value("panelSideOffset", 8).toInt();
+	/* User-tunable offsets from ~/.baresip/config (qt_ keys):
+	 * the gap between the desktop panel edge and our panel
+	 * (top), and the margin from the screen side edge (side).
+	 * Defaults match the previous hard-coded values; edit them
+	 * in the config file to fine-tune the panel position. */
+	int topGap = 16, sideGap = 8;
+	QString v = qt_settings_get("panel_top_offset");
+	if (!v.isEmpty())
+		topGap = v.toInt();
+	v = qt_settings_get("panel_side_offset");
+	if (!v.isEmpty())
+		sideGap = v.toInt();
 	int side = left ? sideGap : 0, other = left ? 0 : sideGap;
 
 	if (bottom) {

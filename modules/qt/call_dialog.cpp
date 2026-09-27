@@ -19,7 +19,6 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QHeaderView>
-#include <QSettings>
 #include <QTimer>
 #include <QMessageBox>
 #include <QPalette>
@@ -304,9 +303,8 @@ CallDialog::CallDialog(QSystemTrayIcon *trayIcon, QWidget *parent)
 	 * height H, the layout minimum is chrome + H. The table
 	 * absorbs the height delta. */
 	{
-		QSettings s;
-		int savedW = s.value("panelWidth", 0).toInt();
-		int savedH = s.value("panelHeight", 0).toInt();
+		int savedW = qt_settings_get("panel_width").toInt();
+		int savedH = qt_settings_get("panel_height").toInt();
 		if (savedW > 0 && savedH > 0) {
 			int tableH0 = historyList_->minimumHeight();
 			int chrome = minimumSizeHint().height() - tableH0;
@@ -594,9 +592,10 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 				resizingPanel_ = false;
 				/* Persist the panel size; it is
 				 * restored on the next start. */
-				QSettings s;
-				s.setValue("panelWidth", width());
-				s.setValue("panelHeight", height());
+				qt_settings_set("panel_width",
+					QString::number(width()));
+				qt_settings_set("panel_height",
+					QString::number(height()));
 				return true;
 			}
 			break;
@@ -719,9 +718,9 @@ void CallDialog::buildUi()
 		this, [this](int col, int, int w) {
 			if (showingContacts_)
 				return;
-			QSettings s;
-			s.beginGroup("historyCols");
-			s.setValue(QString::number(col), w);
+			qt_settings_set(
+				QString("history_col_%1").arg(col),
+				QString::number(w));
 		});
 
 	/* Button row: green on the left, red on the right. */
@@ -954,14 +953,15 @@ void CallDialog::refreshHistory()
 		QIcon::fromTheme("call-start-symbolic"));
 
 	/* Restore saved column widths for non-stretch columns. */
-	QSettings s;
-	s.beginGroup("historyCols");
-	int w0 = s.value("0", -1).toInt();   /* icon */
-	int w1 = s.value("1", -1).toInt();   /* count */
-	int w3 = s.value("3", -1).toInt();   /* duration */
-	int w4 = s.value("4", -1).toInt();   /* date/time */
-	int w5 = s.value("5", -1).toInt();   /* actions */
-	s.endGroup();
+	auto colW = [](const char *key) {
+		QString v = qt_settings_get(key);
+		return v.isEmpty() ? -1 : v.toInt();
+	};
+	int w0 = colW("history_col_0");   /* icon */
+	int w1 = colW("history_col_1");   /* count */
+	int w3 = colW("history_col_3");   /* duration */
+	int w4 = colW("history_col_4");   /* date/time */
+	int w5 = colW("history_col_5");   /* actions */
 
 	/* Most recent first; show up to 10 entries. */
 	auto entries = CallHistory::instance()->recent(10);

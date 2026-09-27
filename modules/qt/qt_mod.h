@@ -117,6 +117,14 @@ QString accountLabel(struct ua *ua);
 QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 			bool *anchorBottom);
 
+class QString;
+/** Read the `qt_<key>` entry from ~/.baresip/config. Returns an
+ *  empty string when the key is absent. */
+QString qt_settings_get(const QString &key);
+/** Write the `qt_<key>` entry in ~/.baresip/config — updates the
+ *  line in place or appends it, preserving all other content. */
+void qt_settings_set(const QString &key, const QString &value);
+
 class QWindow;
 /** Apply top + nearest-horizontal-edge anchors and the computed
  *  margins to a layer-shell window. No-op without HAVE_LAYERSHELL
