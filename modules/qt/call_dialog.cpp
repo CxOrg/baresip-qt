@@ -457,12 +457,18 @@ void CallDialog::fitWidthToHistory()
 
 void CallDialog::showPanel()
 {
-	/* Fit the dialog width to the history content before showing,
-	 * so the full text of each entry is visible without ellipsis.
-	 * Call after adjustSize() so adjustSize doesn't override it. */
-	adjustSize();
-	if (state_ == State::Dialing)
-		fitWidthToHistory();
+	/* With a saved panel size, keep it exactly — adjustSize()
+	 * and the history-width fit would override the user's
+	 * chosen geometry. */
+	if (!savedSize_) {
+		/* Fit the dialog width to the history content before
+		 * showing, so the full text of each entry is visible
+		 * without ellipsis. Call after adjustSize() so
+		 * adjustSize doesn't override it. */
+		adjustSize();
+		if (state_ == State::Dialing)
+			fitWidthToHistory();
+	}
 
 #ifdef HAVE_LAYERSHELL
 	if (layerShellApplied_) {
@@ -566,6 +572,11 @@ bool CallDialog::eventFilter(QObject *obj, QEvent *event)
 		case QEvent::MouseButtonRelease:
 			if (resizingPanel_) {
 				resizingPanel_ = false;
+				/* Persist the panel size; it is
+				 * restored on the next start. */
+				QSettings s;
+				s.setValue("panelWidth", width());
+				s.setValue("panelHeight", height());
 				return true;
 			}
 			break;
@@ -713,6 +724,25 @@ void CallDialog::buildUi()
 	 * InCall/Incoming state where the history list is hidden. */
 	setMinimumWidth(470);
 	resize(470, 320);
+
+	/* Restore the panel size saved by a previous drag resize.
+	 * The table absorbs the height delta — its surrounding
+	 * chrome (dial field, dialpad, buttons, margins) is
+	 * constant. */
+	{
+		QSettings s;
+		int savedW = s.value("panelWidth", 0).toInt();
+		int savedH = s.value("panelHeight", 0).toInt();
+		if (savedW > 0 && savedH > 0) {
+			int chrome = height() - historyList_->height();
+			int tableH = qBound(
+				historyList_->minimumHeight(),
+				savedH - chrome, 400);
+			historyList_->setFixedHeight(tableH);
+			resize(savedW, savedH);
+			savedSize_ = true;
+		}
+	}
 }
 
 

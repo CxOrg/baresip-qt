@@ -190,6 +190,7 @@ private:
 
 	/* Bottom-left grip drag: resize panel width and height. */
 	bool resizingPanel_    = false;
+	bool savedSize_        = false;  /* size restored from settings */
 	QSize resizeStartSize_;
 	QPoint resizeStartGlobal_;
 	int  resizeStartTableH_ = 0;

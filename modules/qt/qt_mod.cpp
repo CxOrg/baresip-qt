@@ -23,8 +23,7 @@
 #include <QGuiApplication>
 #include <QSet>
 #include <QRegularExpression>
-#include <QProcess>
-#include <QUuid>
+#include <QSettings>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
@@ -258,7 +257,7 @@ QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 	QRect full  = screen ? screen->geometry() : QRect(0,0,1920,1080);
 	QRect avail = screen ? screen->availableGeometry() : full;
 
-	/* Vertical margin = tray-panel height + 16px gap, applied on
+	/* Vertical margin = tray-panel height + gap, applied on
 	 * the edge the tray panel sits on. The geometry strut covers
 	 * reserve-space panels; the D-Bus query covers dodge/autohide
 	 * panels which leave no strut. The query also returns the tray
@@ -281,13 +280,23 @@ QMargins qtPanelMargins(const QPoint &anchorPos, bool *anchorLeft,
 			anchorPos.x() < full.center().x();
 	if (anchorLeft)
 		*anchorLeft = left;
-	int side = left ? 8 : 0, other = left ? 0 : 8;
+
+	/* User-tunable offsets from the settings file: the gap
+	 * between the desktop panel edge and our panel (top), and
+	 * the margin from the screen side edge (side). Defaults
+	 * match the previous hard-coded values; edit them in the
+	 * settings file to fine-tune the panel position. */
+	QSettings s;
+	int topGap  = s.value("panelTopOffset", 16).toInt();
+	int sideGap = s.value("panelSideOffset", 8).toInt();
+	int side = left ? sideGap : 0, other = left ? 0 : sideGap;
 
 	if (bottom) {
-		int b = qMax(full.bottom() - avail.bottom(), trayH) + 16;
+		int b = qMax(full.bottom() - avail.bottom(), trayH)
+			+ topGap;
 		return QMargins(side, 0, other, b);
 	}
-	int t = qMax(avail.top() - full.top(), trayH) + 16;
+	int t = qMax(avail.top() - full.top(), trayH) + topGap;
 	return QMargins(side, t, other, 0);
 }
 
@@ -738,108 +747,6 @@ void qt_mod_quit(void)
 }
 
 
-/** KDE Plasma window rule: ensure ~/.config/kwinrulesrc has an
- *  entry for the baresip windows so KWin manages the panel size
- *  (sizerule 4 = KWin remembers the last size the user sets).
- *  Runs on the Qt thread after QApplication is up.
- *
- *  The file is only ever modified through kwriteconfig6 (KWin's
- *  own KConfig writer), which preserves all existing rules — a
- *  direct rewrite here would drop them. The new rule is appended
- *  to the [General] rules list and the count bumped, matching
- *  what the KWin rules KCM writes. The ignoregeometry entries
- *  from the rule-editor example are omitted — under test they
- *  were not needed for the size rule to be applied.
- */
-static void ensure_kwin_rule(void)
-{
-	/* Only under KDE Plasma. */
-	QByteArray de = qgetenv("XDG_CURRENT_DESKTOP");
-	QByteArray kdeSession = qgetenv("KDE_FULL_SESSION");
-	if (!QString::fromUtf8(de).contains("KDE", Qt::CaseInsensitive) &&
-	    kdeSession.isEmpty())
-		return;
-
-	QString path = QDir::homePath() + "/.config/kwinrulesrc";
-
-	/* Existing baresip rule? Scan the raw text — no writes. */
-	QFile f(path);
-	QStringList lines;
-	if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		while (!f.atEnd())
-			lines << QString::fromUtf8(f.readLine());
-		f.close();
-	}
-	for (const QString &line : lines) {
-		if (line.startsWith("wmclass=") &&
-		    line.contains("baresip", Qt::CaseInsensitive))
-			return;
-	}
-
-	auto run = [](const QStringList &args) {
-		QProcess::execute("kwriteconfig6", args);
-	};
-	QString uuid = QUuid::createUuid().toString(
-		QUuid::WithoutBraces);
-
-	/* [General]: bump count and append the group name to the
-	 * rules list (the KCM's own bookkeeping). */
-	int count = 0;
-	{
-		QProcess p;
-		p.start("kreadconfig6", {"--file", "kwinrulesrc",
-			"--group", "General", "--key", "count"});
-		p.waitForFinished(2000);
-		count = QString::fromUtf8(p.readAllStandardOutput())
-			.trimmed().toInt();
-	}
-	run({"--file", "kwinrulesrc", "--group", "General",
-	     "--key", "count", QString::number(count + 1)});
-
-	QString ruleList;
-	{
-		QProcess p;
-		p.start("kreadconfig6", {"--file", "kwinrulesrc",
-			"--group", "General", "--key", "rules"});
-		p.waitForFinished(2000);
-		ruleList = QString::fromUtf8(p.readAllStandardOutput())
-			.trimmed();
-	}
-	if (!ruleList.isEmpty())
-		ruleList += ",";
-	ruleList += uuid;
-	run({"--file", "kwinrulesrc", "--group", "General",
-	     "--key", "rules", ruleList});
-
-	/* The rule itself. */
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "Description", "Baresip - Window"});
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "size", "470,320"});   /* default panel size */
-	/* sizerule 2 = "Remember": KWin itself writes the window's
-	 * last size back to this rule when it closes. (4 would be
-	 * "Force temporarily", which fights the grip resize.) */
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "sizerule", "2"});
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "types", "293"});
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "wmclass", "baresip baresip"});
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "wmclasscomplete", "true"});
-	run({"--file", "kwinrulesrc", "--group", uuid,
-	     "--key", "wmclassmatch", "1"});
-
-	BS_INFO("qt: added KWin window rule to %s\n",
-		path.toUtf8().constData());
-
-	/* Ask KWin to reload its rule book. */
-	QDBusInterface kwin("org.kde.KWin", "/KWin", "org.kde.KWin");
-	if (kwin.isValid())
-		kwin.call("reconfigure");
-}
-
-
 static int qt_thread(void *arg)
 {
 	struct qt_mod *mod = static_cast<struct qt_mod *>(arg);
@@ -871,12 +778,6 @@ static int qt_thread(void *arg)
 	 * so the call panel adopts Plasma panel styling. */
 	KStyleManager::initStyle();
 #endif
-
-	/* Under KDE Plasma, seed a KWin window rule for the baresip
-	 * windows on first run: ~/.config/kwinrulesrc gets an entry
-	 * matching the default panel size (sizerule 4 = KWin
-	 * remembers the last size the user sets). */
-	ensure_kwin_rule();
 
 	TrayApp tray(mod);
 	mod->tray = &tray;
