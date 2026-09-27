@@ -23,6 +23,8 @@
 #include <QGuiApplication>
 #include <QSet>
 #include <QRegularExpression>
+#include <QSettings>
+#include <QUuid>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
@@ -736,6 +738,57 @@ void qt_mod_quit(void)
 }
 
 
+/** KDE Plasma window rule: ensure ~/.config/kwinrulesrc has an
+ *  entry for the baresip windows so KWin manages the panel size
+ *  (sizerule 4 = KWin remembers the last size the user sets).
+ *  Runs on the Qt thread after QApplication is up. The
+ *  ignoregeometry entries from the KWin rule editor example are
+ *  omitted — under test they were not needed for the size rule
+ *  to be applied.
+ */
+static void ensure_kwin_rule(void)
+{
+	/* Only under KDE Plasma. */
+	QByteArray de = qgetenv("XDG_CURRENT_DESKTOP");
+	QByteArray kdeSession = qgetenv("KDE_FULL_SESSION");
+	if (!QString::fromUtf8(de).contains("KDE", Qt::CaseInsensitive) &&
+	    kdeSession.isEmpty())
+		return;
+
+	QString path = QDir::homePath() + "/.config/kwinrulesrc";
+	QSettings s(path, QSettings::NativeFormat);
+	QString wmclass = "baresip baresip";
+
+	/* An entry already exists? */
+	const QStringList groups = s.childGroups();
+	for (const QString &group : groups) {
+		if (s.value(group + "/wmclass").toString()
+		    .compare(wmclass, Qt::CaseInsensitive) == 0)
+			return;
+	}
+
+	s.beginGroup(QUuid::createUuid().toString(
+		QUuid::WithoutBraces));
+	s.setValue("Description", "Baresip - Window");
+	s.setValue("size", "470,320");   /* default panel size */
+	s.setValue("sizerule", 4);
+	s.setValue("types", 293);
+	s.setValue("wmclass", wmclass);
+	s.setValue("wmclasscomplete", true);
+	s.setValue("wmclassmatch", 1);
+	s.endGroup();
+	s.sync();
+
+	BS_INFO("qt: created KWin window rule in %s\n",
+		path.toUtf8().constData());
+
+	/* Ask KWin to reload its rule book. */
+	QDBusInterface kwin("org.kde.KWin", "/KWin", "org.kde.KWin");
+	if (kwin.isValid())
+		kwin.call("reconfigure");
+}
+
+
 static int qt_thread(void *arg)
 {
 	struct qt_mod *mod = static_cast<struct qt_mod *>(arg);
@@ -767,6 +820,12 @@ static int qt_thread(void *arg)
 	 * so the call panel adopts Plasma panel styling. */
 	KStyleManager::initStyle();
 #endif
+
+	/* Under KDE Plasma, seed a KWin window rule for the baresip
+	 * windows on first run: ~/.config/kwinrulesrc gets an entry
+	 * matching the default panel size (sizerule 4 = KWin
+	 * remembers the last size the user sets). */
+	ensure_kwin_rule();
 
 	TrayApp tray(mod);
 	mod->tray = &tray;
