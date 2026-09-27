@@ -1195,6 +1195,13 @@ static int module_init(void)
 	migrate_config();
 	seed_contacts();
 
+	/* Seed the panel position offsets so they are visible and
+	 * editable in the config file. */
+	if (qt_settings_get("panel_top_offset").isEmpty())
+		qt_settings_set("panel_top_offset", "16");
+	if (qt_settings_get("panel_side_offset").isEmpty())
+		qt_settings_set("panel_side_offset", "8");
+
 	qt_mod_obj.clean_number = false;
 	conf_get_bool(conf_cur(), "qt_clean_number", &qt_mod_obj.clean_number);
 
